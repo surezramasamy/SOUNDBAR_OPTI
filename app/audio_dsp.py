@@ -244,10 +244,12 @@ def generate_bandlimited_pink_noise(
         left = left * env
         right = right * env
 
-    # Normalize total stereo RMS to -12 dBFS so all 8 channels have identical reference power
-    combined_rms = np.sqrt(0.5 * (np.mean(left ** 2) + np.mean(right ** 2))) + 1e-9
+    # Normalize using C-weighted RMS so all 8 musical chimes measure identically (82.0 dB) in a flat room
+    c_left = apply_c_weighting(left, sample_rate)
+    c_right = apply_c_weighting(right, sample_rate)
+    combined_c_rms = np.sqrt(0.5 * (np.mean(c_left ** 2) + np.mean(c_right ** 2))) + 1e-9
     target_rms = 10.0 ** (-12.0 / 20.0)
-    gain = target_rms / combined_rms
+    gain = target_rms / combined_c_rms
     left = np.clip(left * gain, -0.95, 0.95)
     right = np.clip(right * gain, -0.95, 0.95)
 
@@ -299,9 +301,13 @@ def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000, chann
         audio = (np.frombuffer(raw_data, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
 
     if num_channels > 1:
-        # Combine channel power without canceling anti-phase signals
         ch_data = audio.reshape(-1, num_channels)
-        audio = ch_data[:, 0] if np.std(ch_data[:, 0]) >= np.std(ch_data[:, 1]) else ch_data[:, 1]
+        # If Left and Right are in-phase or alternating, sum power; if anti-phase, use dominant channel
+        corr = np.corrcoef(ch_data[:, 0], ch_data[:, 1])[0, 1]
+        if corr < -0.2:
+            audio = ch_data[:, 0]
+        else:
+            audio = np.sqrt(0.5) * (ch_data[:, 0] + ch_data[:, 1]) if corr > 0.2 else (ch_data[:, 0] + ch_data[:, 1]) * np.sqrt(0.5)
 
     # Trim startup/ending latency (keep middle 75% of capture)
     if len(audio) > int(sample_rate * 0.8):
