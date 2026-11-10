@@ -83,7 +83,8 @@ def get_channel_tone(channel_id: str, duration: float = 3.5):
     wav_bytes = generate_bandlimited_pink_noise(
         duration_sec=duration,
         low_cut=ch_info["freq_low"],
-        high_cut=ch_info["freq_high"]
+        high_cut=ch_info["freq_high"],
+        channel_id=channel_id
     )
     return Response(content=wav_bytes, media_type="audio/wav")
 

@@ -243,8 +243,8 @@
       source.connect(processor);
       processor.connect(audioCtx.destination);
 
-      // Play calibration pink noise for this channel
-      const player = new Audio(`/api/tone/${ch.id}?duration=3.2`);
+      // Play calibration pink noise for this channel (cache-busted so new spatial matrix WAV is always fetched)
+      const player = new Audio(`/api/tone/${ch.id}?duration=3.2&v=${Date.now()}`);
       await player.play();
 
       await new Promise(resolve => {

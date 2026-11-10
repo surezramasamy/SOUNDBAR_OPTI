@@ -16,7 +16,7 @@ Q930_CHANNELS = [
         "target_offset_db": 0.0,
         "freq_low": 150,
         "freq_high": 6000,
-        "desc": "Fixed reference anchor. Set comfortable master volume before starting."
+        "desc": "Alternates Hard-Left then Hard-Right (uncorrelated) so Center & Rears stay silent."
     },
     {
         "id": "center",
@@ -27,7 +27,7 @@ Q930_CHANNELS = [
         "target_offset_db": 0.5,
         "freq_low": 300,
         "freq_high": 3500,
-        "desc": "Dialogue & vocals. Balanced to match Front L/R without harsh sibilance."
+        "desc": "Pure 0-deg in-phase mono (L = +R). Locks strictly to the Front Center speaker."
     },
     {
         "id": "side",
@@ -38,7 +38,7 @@ Q930_CHANNELS = [
         "target_offset_db": 0.0,
         "freq_low": 300,
         "freq_high": 5500,
-        "desc": "90-degree side-firing drivers. Often cause wall-bounce hitting if too high."
+        "desc": "135-deg Hilbert phase-shifted stereo to steer audio to 90-deg side-firing drivers."
     },
     {
         "id": "wide",
@@ -49,7 +49,7 @@ Q930_CHANNELS = [
         "target_offset_db": 0.0,
         "freq_low": 300,
         "freq_high": 5500,
-        "desc": "45-degree corner-firing drivers expanding the front stage."
+        "desc": "Decorrelated wide stereo with center-nulling to steer to 45-deg wide drivers."
     },
     {
         "id": "front_top",
@@ -58,9 +58,9 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": -0.5,
-        "freq_low": 400,
-        "freq_high": 7500,
-        "desc": "Up-firing ceiling drivers. Tamed if ceiling reflections create harsh peaks."
+        "freq_low": 600,
+        "freq_high": 9000,
+        "desc": "Decorrelated stereo + 7.5 kHz Atmos elevation cues for Front Up-Firing drivers."
     },
     {
         "id": "rear",
@@ -71,7 +71,7 @@ Q930_CHANNELS = [
         "target_offset_db": -1.0,
         "freq_low": 160,
         "freq_high": 6000,
-        "desc": "Rear satellites. Often sit close to the sofa and hit the ears if uncalibrated."
+        "desc": "180-deg Out-of-Phase Dolby Surround Matrix (L = -R) + Hilbert quadrature to force Rear Satellites."
     },
     {
         "id": "rear_top",
@@ -80,9 +80,9 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": -1.0,
-        "freq_low": 400,
-        "freq_high": 7500,
-        "desc": "Up-firing rear satellite drivers for overhead Atmos balance."
+        "freq_low": 600,
+        "freq_high": 9500,
+        "desc": "180-deg Out-of-Phase Surround Matrix + 7.5 kHz elevation cues for Rear Top Up-Firing satellites."
     },
     {
         "id": "subwoofer",
@@ -92,22 +92,15 @@ Q930_CHANNELS = [
         "max_db": 6,
         "target_offset_db": 2.5,
         "freq_low": 28,
-        "freq_high": 95,
-        "desc": "8-inch wireless sub. Eliminates boomy chest/ear-hitting standing waves."
+        "freq_high": 90,
+        "desc": "Deep 28-90 Hz LFE bass routed strictly to the wireless Subwoofer."
     }
 ]
 
 
-def generate_bandlimited_pink_noise(duration_sec=3.5, sample_rate=44100, low_cut=100, high_cut=3000):
-    """
-    Generates deterministic band-limited pink noise with smooth fade envelopes
-    for testing a specific speaker channel group without speaker pop.
-    """
-    rng = np.random.default_rng(42)
-    num_samples = int(duration_sec * sample_rate)
+def _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut):
+    """Helper to generate a single band-limited pink noise array."""
     white = rng.standard_normal(num_samples)
-
-    # Pink noise 1/f filter
     b = [0.049922035, -0.095993537, 0.050612699, -0.004408786]
     a = [1.0, -2.494956002, 2.017265875, -0.522189400]
     pink = signal.lfilter(b, a, white)
@@ -115,24 +108,135 @@ def generate_bandlimited_pink_noise(duration_sec=3.5, sample_rate=44100, low_cut
     nyquist = 0.5 * sample_rate
     low = max(15.0, float(low_cut)) / nyquist
     high = min(nyquist - 100.0, float(high_cut)) / nyquist
-
     sos = signal.butter(4, [low, high], btype="bandpass", output="sos")
-    filtered = signal.sosfilt(sos, pink)
+    return signal.sosfilt(sos, pink)
+
+
+def _apply_elevation_boost(sig, sample_rate):
+    """
+    Applies a peaking boost around 7.5 kHz (Blauert's vertical elevation band)
+    which Samsung's Adaptive / Surround upmixer uses to steer energy to Top height channels.
+    """
+    f0 = 7500.0
+    Q = 2.0
+    gain_db = 6.0
+    A = 10.0 ** (gain_db / 40.0)
+    w0 = 2.0 * np.pi * f0 / sample_rate
+    alpha = np.sin(w0) / (2.0 * Q)
+    b0 = 1.0 + alpha * A
+    b1 = -2.0 * np.cos(w0)
+    b2 = 1.0 - alpha * A
+    a0 = 1.0 + alpha / A
+    a1 = -2.0 * np.cos(w0)
+    a2 = 1.0 - alpha / A
+    return signal.lfilter([b0 / a0, b1 / a0, b2 / a0], [1.0, a1 / a0, a2 / a0], sig)
+
+
+def generate_bandlimited_pink_noise(
+    duration_sec=3.5,
+    sample_rate=44100,
+    low_cut=100,
+    high_cut=3000,
+    channel_id="center"
+):
+    """
+    Generates stereo 16-bit PCM WAV with Dolby Surround / Phase-Matrix spatial encoding
+    so that over Bluetooth (in Surround / Adaptive mode), the Samsung Q930 steers audio
+    to the intended speaker group (Rear, Rear Top, Side, Wide, Front L/R, Center, Sub).
+    """
+    rng = np.random.default_rng(42)
+    num_samples = int(duration_sec * sample_rate)
+
+    sig_a = _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut)
+    sig_b = _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut)
+
+    if channel_id == "center":
+        # Pure correlated in-phase mono (L = +S, R = +S) -> 100% Front Center speaker
+        left = sig_a
+        right = sig_a
+
+    elif channel_id == "subwoofer":
+        # Pure in-phase LFE bass (28-90 Hz) -> 100% Subwoofer
+        left = sig_a
+        right = sig_a
+
+    elif channel_id == "front_left_right":
+        # Alternate Hard-Left then Hard-Right with uncorrelated stereo tail
+        # Prevents the Surround decoder from collapsing L/R into the Center speaker
+        half = num_samples // 2
+        left = np.zeros(num_samples)
+        right = np.zeros(num_samples)
+        left[:half] = sig_a[:half]
+        right[half:] = sig_b[half:]
+
+    elif channel_id == "rear":
+        # Dolby Surround / Pro Logic IIx Rear Matrix Encoding:
+        # 180-deg out-of-phase (L = +S, R = -S) nulls the Front Center (L + R = 0)
+        # combined with +/-90-deg Hilbert quadrature phase shift + 12ms Haas surround delay
+        analytic_a = signal.hilbert(sig_a)
+        analytic_b = signal.hilbert(sig_b)
+        quad_l = np.real(analytic_a) - np.imag(analytic_a)
+        quad_r = np.real(analytic_b) + np.imag(analytic_b)
+
+        delay_samples = int(0.012 * sample_rate)
+        antiphase_r = -np.roll(sig_a, delay_samples)
+        left = 0.65 * sig_a + 0.35 * quad_l
+        right = 0.65 * antiphase_r - 0.35 * quad_r
+
+    elif channel_id == "rear_top":
+        # Rear Top Atmos Height:
+        # 180-deg Out-of-Phase Surround Matrix (steers to Rear Satellites)
+        # + 7.5 kHz HRTF Elevation Cues (steers to Rear Up-Firing Top drivers)
+        elev_a = _apply_elevation_boost(sig_a, sample_rate)
+        elev_b = _apply_elevation_boost(sig_b, sample_rate)
+        analytic_a = signal.hilbert(elev_a)
+        delay_samples = int(0.015 * sample_rate)
+        left = 0.7 * elev_a + 0.3 * np.imag(analytic_a)
+        right = -0.7 * np.roll(elev_a, delay_samples) - 0.3 * elev_b
+
+    elif channel_id == "side":
+        # Side-firing (90-deg): 135-deg Hilbert phase shift + opposite stereo pan
+        analytic = signal.hilbert(sig_a)
+        hilb_90 = np.imag(analytic)
+        left = sig_a - 0.5 * sig_b
+        right = -0.707 * sig_a + 0.707 * hilb_90 + 0.5 * sig_b
+
+    elif channel_id == "wide":
+        # Wide-firing (45-deg): Decorrelated dual pink noise with out-of-phase crossfeed
+        # Suppresses center channel while keeping front-hemisphere width
+        left = sig_a - 0.38 * sig_b
+        right = sig_b - 0.38 * sig_a
+
+    elif channel_id == "front_top":
+        # Front Top Atmos Height: Decorrelated stereo + center cancellation + 7.5 kHz elevation cue
+        elev_a = _apply_elevation_boost(sig_a, sample_rate)
+        elev_b = _apply_elevation_boost(sig_b, sample_rate)
+        left = elev_a - 0.45 * elev_b
+        right = elev_b - 0.45 * elev_a
+
+    else:
+        left = sig_a
+        right = sig_b
 
     # Smooth 100ms fade-in/out to prevent transient clicks
     fade_len = int(sample_rate * 0.1)
     if num_samples > 2 * fade_len:
-        filtered[:fade_len] *= np.linspace(0.0, 1.0, fade_len)
-        filtered[-fade_len:] *= np.linspace(1.0, 0.0, fade_len)
+        env = np.ones(num_samples)
+        env[:fade_len] = np.linspace(0.0, 1.0, fade_len)
+        env[-fade_len:] = np.linspace(1.0, 0.0, fade_len)
+        left = left * env
+        right = right * env
 
-    # Normalize to -12 dBFS RMS
-    rms = np.sqrt(np.mean(filtered ** 2)) + 1e-9
+    # Normalize combined stereo power to -12 dBFS RMS so all test signals have equal reference energy
+    combined_rms = np.sqrt(0.5 * (np.mean(left ** 2) + np.mean(right ** 2))) + 1e-9
     target_rms = 10.0 ** (-12.0 / 20.0)
-    normalized = np.clip(filtered * (target_rms / rms), -0.95, 0.95)
+    gain = target_rms / combined_rms
+    left = np.clip(left * gain, -0.95, 0.95)
+    right = np.clip(right * gain, -0.95, 0.95)
 
-    # Stereo 16-bit PCM WAV (compatible with all Bluetooth/TV outputs)
-    pcm16 = (normalized * 32767.0).astype(np.int16)
-    stereo = np.column_stack((pcm16, pcm16)).ravel()
+    pcm_l = (left * 32767.0).astype(np.int16)
+    pcm_r = (right * 32767.0).astype(np.int16)
+    stereo = np.column_stack((pcm_l, pcm_r)).ravel()
 
     buf = io.BytesIO()
     with wave.open(buf, "wb") as wav_file:
@@ -178,7 +282,7 @@ def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000):
         audio = (np.frombuffer(raw_data, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
 
     if num_channels > 1:
-        audio = audio.reshape(-1, num_channels).mean(axis=1)
+        audio = audio.reshape(-1, num_channels)[:, 0]
 
     # Trim startup/ending latency (keep middle 70% of capture)
     if len(audio) > int(sample_rate * 0.8):
