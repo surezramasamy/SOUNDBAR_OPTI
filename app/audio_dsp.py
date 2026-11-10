@@ -170,29 +170,23 @@ def generate_bandlimited_pink_noise(
         right[half:] = sig_b[half:]
 
     elif channel_id == "rear":
-        # Dolby Surround / Pro Logic IIx Rear Matrix Encoding:
-        # 180-deg out-of-phase (L = +S, R = -S) nulls the Front Center (L + R = 0)
-        # combined with +/-90-deg Hilbert quadrature phase shift + 12ms Haas surround delay
+        # Pure Dolby Surround / Pro Logic Matrix Encoding for Rear Satellites:
+        # Zero-delay 180-deg out-of-phase (R = -L) makes Center (L + R) = 0.0,
+        # forcing 100% of the signal into the Surround difference channel (L - R) -> Rear Speakers!
         analytic_a = signal.hilbert(sig_a)
-        analytic_b = signal.hilbert(sig_b)
-        quad_l = np.real(analytic_a) - np.imag(analytic_a)
-        quad_r = np.real(analytic_b) + np.imag(analytic_b)
-
-        delay_samples = int(0.012 * sample_rate)
-        antiphase_r = -np.roll(sig_a, delay_samples)
-        left = 0.65 * sig_a + 0.35 * quad_l
-        right = 0.65 * antiphase_r - 0.35 * quad_r
+        hilb_90 = np.imag(analytic_a)
+        left = 0.92 * sig_a + 0.20 * hilb_90
+        right = -0.92 * sig_a + 0.20 * hilb_90
 
     elif channel_id == "rear_top":
         # Rear Top Atmos Height:
-        # 180-deg Out-of-Phase Surround Matrix (steers to Rear Satellites)
+        # 180-deg Out-of-Phase Surround Matrix (Center L+R = 0 -> steers to Rear Satellites)
         # + 7.5 kHz HRTF Elevation Cues (steers to Rear Up-Firing Top drivers)
         elev_a = _apply_elevation_boost(sig_a, sample_rate)
-        elev_b = _apply_elevation_boost(sig_b, sample_rate)
         analytic_a = signal.hilbert(elev_a)
-        delay_samples = int(0.015 * sample_rate)
-        left = 0.7 * elev_a + 0.3 * np.imag(analytic_a)
-        right = -0.7 * np.roll(elev_a, delay_samples) - 0.3 * elev_b
+        hilb_90 = np.imag(analytic_a)
+        left = 0.92 * elev_a + 0.20 * hilb_90
+        right = -0.92 * elev_a + 0.20 * hilb_90
 
     elif channel_id == "side":
         # Side-firing (90-deg): 135-deg Hilbert phase shift + opposite stereo pan
