@@ -3,12 +3,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi.staticfiles import StaticFiles
 import os
+import sys
 
-from app.audio_dsp import (
-    Q930_CHANNELS,
-    generate_bandlimited_pink_noise,
-    analyze_recorded_channel_audio
-)
+# Ensure imports work whether launched via `fastapi run app/main.py` or `uvicorn app.main:app`
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_parent_dir = os.path.dirname(_current_dir)
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
+try:
+    from app.audio_dsp import (
+        Q930_CHANNELS,
+        generate_bandlimited_pink_noise,
+        analyze_recorded_channel_audio
+    )
+except ImportError:
+    from audio_dsp import (
+        Q930_CHANNELS,
+        generate_bandlimited_pink_noise,
+        analyze_recorded_channel_audio
+    )
 
 app = FastAPI(
     title="Samsung HW-Q930 9.1.4 Channel Test & dB Confirmation API",
