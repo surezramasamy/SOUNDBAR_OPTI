@@ -3,9 +3,7 @@ from scipy import signal
 import io
 import wave
 
-# Samsung HW-Q930 9.1.4 Channel Map:
-# Front L/R is the fixed baseline (controlled by Master Volume).
-# All other 7 groups have dedicated dB adjustments on the Samsung Remote.
+# Samsung HW-Q930 9.1.4 Channel Map with Musical Chime Harmonics
 Q930_CHANNELS = [
     {
         "id": "front_left_right",
@@ -14,9 +12,10 @@ Q930_CHANNELS = [
         "min_db": 0,
         "max_db": 0,
         "target_offset_db": 0.0,
-        "freq_low": 150,
-        "freq_high": 6000,
-        "desc": "Alternates Hard-Left then Hard-Right (uncorrelated) so Center & Rears stay silent."
+        "freq_low": 180,
+        "freq_high": 4500,
+        "harmonics": [220.0, 330.0, 440.0, 554.37, 659.25, 880.0, 1318.5, 2637.0],
+        "desc": "Plays 'Ding' on Left, 'Dong' on Right, then warm stereo chord (Reference Anchor)."
     },
     {
         "id": "center",
@@ -25,9 +24,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": 0.5,
-        "freq_low": 300,
-        "freq_high": 3500,
-        "desc": "Pure 0-deg in-phase mono (L = +R). Locks strictly to the Front Center speaker."
+        "freq_low": 240,
+        "freq_high": 3600,
+        "harmonics": [261.63, 329.63, 392.0, 523.25, 659.25, 783.99, 1046.5, 2093.0],
+        "desc": "Pure vocal-range musical 'Ding-Dong' chime locked to the Front Center speaker."
     },
     {
         "id": "side",
@@ -36,9 +36,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": 0.0,
-        "freq_low": 300,
-        "freq_high": 5500,
-        "desc": "135-deg Hilbert phase-shifted stereo to steer audio to 90-deg side-firing drivers."
+        "freq_low": 280,
+        "freq_high": 5000,
+        "harmonics": [293.66, 369.99, 440.0, 587.33, 739.99, 880.0, 1479.98, 2959.96],
+        "desc": "135-deg phase-steered musical chime for 90-deg side-firing speakers."
     },
     {
         "id": "wide",
@@ -47,9 +48,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": 0.0,
-        "freq_low": 300,
-        "freq_high": 5500,
-        "desc": "Decorrelated wide stereo with center-nulling to steer to 45-deg wide drivers."
+        "freq_low": 280,
+        "freq_high": 5000,
+        "harmonics": [311.13, 392.0, 466.16, 622.25, 783.99, 932.33, 1567.98, 3135.96],
+        "desc": "Wide stereo musical chime steered to 45-deg corner-firing drivers."
     },
     {
         "id": "front_top",
@@ -58,9 +60,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": -0.5,
-        "freq_low": 600,
-        "freq_high": 9000,
-        "desc": "Decorrelated stereo + 7.5 kHz Atmos elevation cues for Front Up-Firing drivers."
+        "freq_low": 400,
+        "freq_high": 8500,
+        "harmonics": [440.0, 554.37, 659.25, 880.0, 1318.5, 2637.0, 5274.0, 7040.0],
+        "desc": "High celestial Atmos bell chime for Front Up-Firing height speakers."
     },
     {
         "id": "rear",
@@ -69,9 +72,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": -1.0,
-        "freq_low": 160,
-        "freq_high": 6000,
-        "desc": "180-deg Out-of-Phase Dolby Surround Matrix (L = -R) + Hilbert quadrature to force Rear Satellites."
+        "freq_low": 200,
+        "freq_high": 4500,
+        "harmonics": [246.94, 311.13, 369.99, 493.88, 622.25, 739.99, 1244.5, 2489.0],
+        "desc": "180-deg Dolby Surround matrixed 'Ding-Dong' chime for Rear Satellites."
     },
     {
         "id": "rear_top",
@@ -80,9 +84,10 @@ Q930_CHANNELS = [
         "min_db": -6,
         "max_db": 6,
         "target_offset_db": -1.0,
-        "freq_low": 600,
-        "freq_high": 9500,
-        "desc": "180-deg Out-of-Phase Surround Matrix + 7.5 kHz elevation cues for Rear Top Up-Firing satellites."
+        "freq_low": 400,
+        "freq_high": 8500,
+        "harmonics": [493.88, 622.25, 739.99, 987.77, 1479.98, 2959.96, 5919.9, 7458.6],
+        "desc": "180-deg surround + high Atmos bell chime for Rear Up-Firing satellites."
     },
     {
         "id": "subwoofer",
@@ -91,129 +96,147 @@ Q930_CHANNELS = [
         "min_db": -12,
         "max_db": 6,
         "target_offset_db": 2.5,
-        "freq_low": 28,
-        "freq_high": 90,
-        "desc": "Deep 28-90 Hz LFE bass routed strictly to the wireless Subwoofer."
+        "freq_low": 30,
+        "freq_high": 95,
+        "harmonics": [36.71, 41.20, 48.99, 55.0, 61.74, 65.41, 73.42, 82.41],
+        "desc": "Deep warm bass 'Boom-Dum' musical pulse (36-85 Hz) for the Subwoofer."
     }
 ]
 
 
-def _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut):
-    """Helper to generate a single band-limited pink noise array."""
-    white = rng.standard_normal(num_samples)
-    b = [0.049922035, -0.095993537, 0.050612699, -0.004408786]
-    a = [1.0, -2.494956002, 2.017265875, -0.522189400]
-    pink = signal.lfilter(b, a, white)
+def _bell_note(t, freqs, weights, decay_rate=3.2):
+    """Synthesizes a warm, pleasant musical chime note with soft attack and bell decay."""
+    attack = 1.0 - np.exp(-t / 0.018)
+    decay = np.exp(-decay_rate * t)
+    env = attack * decay
+    wave_sum = np.zeros_like(t)
+    for idx, (f, w) in enumerate(zip(freqs, weights)):
+        # Slight phase offset per harmonic avoids sharp transient spikes
+        phase = (idx * 0.71) % (2.0 * np.pi)
+        wave_sum += w * np.sin(2.0 * np.pi * f * t + phase)
+    return wave_sum * env
 
-    nyquist = 0.5 * sample_rate
-    low = max(15.0, float(low_cut)) / nyquist
-    high = min(nyquist - 100.0, float(high_cut)) / nyquist
-    sos = signal.butter(4, [low, high], btype="bandpass", output="sos")
-    return signal.sosfilt(sos, pink)
 
+def _sustained_chord(t, freqs, fade_s=0.08):
+    """Synthesizes a smooth, warm multi-harmonic chord with equal-energy harmonics for SPL/resonance analysis."""
+    n = len(t)
+    env = np.ones(n)
+    fade_n = min(int(fade_s * (n / max(t[-1], 0.1))), n // 3)
+    if fade_n > 1:
+        env[:fade_n] = np.linspace(0.0, 1.0, fade_n)
+        env[-fade_n:] = np.linspace(1.0, 0.0, fade_n)
 
-def _apply_elevation_boost(sig, sample_rate):
-    """
-    Applies a peaking boost around 7.5 kHz (Blauert's vertical elevation band)
-    which Samsung's Adaptive / Surround upmixer uses to steer energy to Top height channels.
-    """
-    f0 = 7500.0
-    Q = 2.0
-    gain_db = 6.0
-    A = 10.0 ** (gain_db / 40.0)
-    w0 = 2.0 * np.pi * f0 / sample_rate
-    alpha = np.sin(w0) / (2.0 * Q)
-    b0 = 1.0 + alpha * A
-    b1 = -2.0 * np.cos(w0)
-    b2 = 1.0 - alpha * A
-    a0 = 1.0 + alpha / A
-    a1 = -2.0 * np.cos(w0)
-    a2 = 1.0 - alpha / A
-    return signal.lfilter([b0 / a0, b1 / a0, b2 / a0], [1.0, a1 / a0, a2 / a0], sig)
+    wave_sum = np.zeros(n)
+    for idx, f in enumerate(freqs):
+        phase = (idx * 1.13) % (2.0 * np.pi)
+        # Gentle vibrato shimmer makes the chord pleasant to the ear
+        vibrato = 0.0015 * np.sin(2.0 * np.pi * 4.5 * t + idx)
+        wave_sum += np.sin(2.0 * np.pi * f * (t + vibrato) + phase)
+    return (wave_sum / max(len(freqs), 1)) * env
 
 
 def generate_bandlimited_pink_noise(
-    duration_sec=3.5,
+    duration_sec=3.2,
     sample_rate=44100,
     low_cut=100,
     high_cut=3000,
     channel_id="center"
 ):
     """
-    Generates stereo 16-bit PCM WAV with Dolby Surround / Phase-Matrix spatial encoding
-    so that over Bluetooth (in Surround / Adaptive mode), the Samsung Q930 steers audio
-    to the intended speaker group (Rear, Rear Top, Side, Wide, Front L/R, Center, Sub).
+    Generates a pleasant 'Ding-Dong + Warm Harmonic Chord' musical test signal (WAV).
+    - Segment 1 (0.0 - 0.9s): 'DING' (Higher musical bell triad)
+    - Segment 2 (0.9 - 1.8s): 'DONG' (Warm resolving lower fifth bell triad)
+    - Segment 3 (1.8 - 3.2s): 'WARM CHORD' (Full 8-harmonic balanced chord for accurate dB & peak check)
+    Includes Dolby Surround Phase-Matrix spatial steering per channel.
     """
-    rng = np.random.default_rng(42)
+    ch_info = next((c for c in Q930_CHANNELS if c["id"] == channel_id), Q930_CHANNELS[1])
+    harms = ch_info["harmonics"]
+
     num_samples = int(duration_sec * sample_rate)
+    n1 = int(0.28 * num_samples)
+    n2 = int(0.28 * num_samples)
+    n3 = num_samples - n1 - n2
 
-    sig_a = _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut)
-    sig_b = _make_pink_band(rng, num_samples, sample_rate, low_cut, high_cut)
+    t1 = np.arange(n1) / sample_rate
+    t2 = np.arange(n2) / sample_rate
+    t3 = np.arange(n3) / sample_rate
 
+    if channel_id == "subwoofer":
+        # Deep musical sub-bass swell: High bass note ("Boom") -> Low bass note ("Dum") -> Warm bass chord
+        ding_freqs = [harms[3], harms[5], harms[6], harms[7]]
+        dong_freqs = [harms[0], harms[1], harms[2], harms[4]]
+        decay = 2.0
+    else:
+        # Classic pleasant "Ding" (upper major bell) -> "Dong" (lower resolving bell)
+        ding_freqs = [harms[2], harms[4], harms[5], harms[6], harms[7]]
+        dong_freqs = [harms[0], harms[1], harms[2], harms[3], harms[5]]
+        decay = 3.0
+
+    ding_weights = [1.0 / (1.0 + 0.25 * i) for i in range(len(ding_freqs))]
+    dong_weights = [1.0 / (1.0 + 0.25 * i) for i in range(len(dong_freqs))]
+
+    seg_ding = _bell_note(t1, ding_freqs, ding_weights, decay_rate=decay)
+    seg_dong = _bell_note(t2, dong_freqs, dong_weights, decay_rate=decay)
+    seg_chord = _sustained_chord(t3, harms, fade_s=0.08)
+
+    # Normalize each segment to equal RMS so the meter stays steady across Ding -> Dong -> Chord
+    for seg in (seg_ding, seg_dong, seg_chord):
+        r = np.sqrt(np.mean(seg ** 2)) + 1e-9
+        seg *= (0.25 / r)
+
+    sig_a = np.concatenate([seg_ding, seg_dong, seg_chord])
+
+    # Create a slightly detuned/phase-shifted companion signal for wide/stereo channels
+    seg_ding_b = _bell_note(t1, [f * 1.003 for f in ding_freqs], ding_weights, decay_rate=decay)
+    seg_dong_b = _bell_note(t2, [f * 0.997 for f in dong_freqs], dong_weights, decay_rate=decay)
+    seg_chord_b = _sustained_chord(t3, [f * 1.002 for f in harms], fade_s=0.08)
+    for seg in (seg_ding_b, seg_dong_b, seg_chord_b):
+        r = np.sqrt(np.mean(seg ** 2)) + 1e-9
+        seg *= (0.25 / r)
+    sig_b = np.concatenate([seg_ding_b, seg_dong_b, seg_chord_b])
+
+    # Apply Spatial Channel Steering
     if channel_id == "center":
-        # Pure correlated in-phase mono (L = +S, R = +S) -> 100% Front Center speaker
+        # Pure correlated in-phase mono (L = +R) -> Locks to Front Center
         left = sig_a
         right = sig_a
 
     elif channel_id == "subwoofer":
-        # Pure in-phase LFE bass (28-90 Hz) -> 100% Subwoofer
+        # Pure in-phase LFE sub-bass -> Subwoofer
         left = sig_a
         right = sig_a
 
     elif channel_id == "front_left_right":
-        # Alternate Hard-Left then Hard-Right with uncorrelated stereo tail
-        # Prevents the Surround decoder from collapsing L/R into the Center speaker
-        half = num_samples // 2
-        left = np.zeros(num_samples)
-        right = np.zeros(num_samples)
-        left[:half] = sig_a[:half]
-        right[half:] = sig_b[half:]
+        # "Ding" on Left Speaker, "Dong" on Right Speaker, then Stereo Chord on both!
+        left = np.concatenate([seg_ding * 1.414, np.zeros_like(seg_dong), seg_chord])
+        right = np.concatenate([np.zeros_like(seg_ding), seg_dong * 1.414, seg_chord_b])
 
-    elif channel_id == "rear":
-        # Pure Dolby Surround / Pro Logic Matrix Encoding for Rear Satellites:
-        # Zero-delay 180-deg out-of-phase (R = -L) makes Center (L + R) = 0.0,
-        # forcing 100% of the signal into the Surround difference channel (L - R) -> Rear Speakers!
+    elif channel_id in ("rear", "rear_top"):
+        # 180-deg Out-of-Phase Dolby Surround Matrix (R = -L) + Hilbert quadrature
+        # Nulls Front Center (L + R = 0) and steers chime to Rear Speakers
         analytic_a = signal.hilbert(sig_a)
         hilb_90 = np.imag(analytic_a)
         left = 0.92 * sig_a + 0.20 * hilb_90
         right = -0.92 * sig_a + 0.20 * hilb_90
 
-    elif channel_id == "rear_top":
-        # Rear Top Atmos Height:
-        # 180-deg Out-of-Phase Surround Matrix (Center L+R = 0 -> steers to Rear Satellites)
-        # + 7.5 kHz HRTF Elevation Cues (steers to Rear Up-Firing Top drivers)
-        elev_a = _apply_elevation_boost(sig_a, sample_rate)
-        analytic_a = signal.hilbert(elev_a)
-        hilb_90 = np.imag(analytic_a)
-        left = 0.92 * elev_a + 0.20 * hilb_90
-        right = -0.92 * elev_a + 0.20 * hilb_90
-
     elif channel_id == "side":
-        # Side-firing (90-deg): 135-deg Hilbert phase shift + opposite stereo pan
-        analytic = signal.hilbert(sig_a)
-        hilb_90 = np.imag(analytic)
-        left = sig_a - 0.5 * sig_b
-        right = -0.707 * sig_a + 0.707 * hilb_90 + 0.5 * sig_b
+        # 135-deg Hilbert phase-shifted stereo for 90-deg side-firing drivers
+        analytic_a = signal.hilbert(sig_a)
+        hilb_90 = np.imag(analytic_a)
+        left = sig_a - 0.45 * sig_b
+        right = -0.707 * sig_a + 0.707 * hilb_90 + 0.45 * sig_b
 
-    elif channel_id == "wide":
-        # Wide-firing (45-deg): Decorrelated dual pink noise with out-of-phase crossfeed
-        # Suppresses center channel while keeping front-hemisphere width
-        left = sig_a - 0.38 * sig_b
-        right = sig_b - 0.38 * sig_a
-
-    elif channel_id == "front_top":
-        # Front Top Atmos Height: Decorrelated stereo + center cancellation + 7.5 kHz elevation cue
-        elev_a = _apply_elevation_boost(sig_a, sample_rate)
-        elev_b = _apply_elevation_boost(sig_b, sample_rate)
-        left = elev_a - 0.45 * elev_b
-        right = elev_b - 0.45 * elev_a
+    elif channel_id in ("wide", "front_top"):
+        # Decorrelated wide stereo with center cancellation
+        left = sig_a - 0.40 * sig_b
+        right = sig_b - 0.40 * sig_a
 
     else:
         left = sig_a
         right = sig_b
 
-    # Smooth 100ms fade-in/out to prevent transient clicks
-    fade_len = int(sample_rate * 0.1)
+    # Smooth outer envelope
+    fade_len = int(sample_rate * 0.05)
     if num_samples > 2 * fade_len:
         env = np.ones(num_samples)
         env[:fade_len] = np.linspace(0.0, 1.0, fade_len)
@@ -221,7 +244,7 @@ def generate_bandlimited_pink_noise(
         left = left * env
         right = right * env
 
-    # Normalize combined stereo power to -12 dBFS RMS so all test signals have equal reference energy
+    # Normalize total stereo RMS to -12 dBFS so all 8 channels have identical reference power
     combined_rms = np.sqrt(0.5 * (np.mean(left ** 2) + np.mean(right ** 2))) + 1e-9
     target_rms = 10.0 ** (-12.0 / 20.0)
     gain = target_rms / combined_rms
@@ -255,11 +278,11 @@ def apply_c_weighting(samples, sample_rate):
     return signal.lfilter(b_z, a_z, samples)
 
 
-def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000):
+def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000, channel_id=None):
     """
-    Analyzes 16-bit PCM WAV recorded by the phone microphone.
-    Returns C-weighted SPL proxy, in-band RMS, dominant resonant peak frequency,
-    and whether harsh 'hitting' acoustic spikes are present.
+    Analyzes 16-bit PCM WAV recorded by the phone microphone during the musical 'Ding-Dong' test.
+    Computes C-weighted SPL dB and checks relative balance across the channel's musical harmonics
+    to detect boomy room standing waves or harsh speaker resonance peaks.
     """
     with wave.open(io.BytesIO(wav_bytes), "rb") as wf:
         sample_rate = wf.getframerate()
@@ -276,17 +299,19 @@ def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000):
         audio = (np.frombuffer(raw_data, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
 
     if num_channels > 1:
-        audio = audio.reshape(-1, num_channels)[:, 0]
+        # Combine channel power without canceling anti-phase signals
+        ch_data = audio.reshape(-1, num_channels)
+        audio = ch_data[:, 0] if np.std(ch_data[:, 0]) >= np.std(ch_data[:, 1]) else ch_data[:, 1]
 
-    # Trim startup/ending latency (keep middle 70% of capture)
+    # Trim startup/ending latency (keep middle 75% of capture)
     if len(audio) > int(sample_rate * 0.8):
-        s = int(len(audio) * 0.15)
-        e = int(len(audio) * 0.85)
+        s = int(len(audio) * 0.12)
+        e = int(len(audio) * 0.88)
         audio = audio[s:e]
 
     # Band-limit around channel's active range to reject out-of-band ambient noise
     nyquist = 0.5 * sample_rate
-    low = max(18.0, float(freq_low) * 0.8) / nyquist
+    low = max(18.0, float(freq_low) * 0.75) / nyquist
     high = min(nyquist - 100.0, float(freq_high) * 1.15) / nyquist
     if low < high:
         sos = signal.butter(3, [low, high], btype="bandpass", output="sos")
@@ -294,31 +319,40 @@ def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000):
     else:
         band_audio = audio
 
-    # 1. C-Weighted SPL (dBC proxy)
+    # 1. C-Weighted SPL (dBC)
     c_weighted = apply_c_weighting(band_audio, sample_rate)
     rms_c = float(np.sqrt(np.mean(c_weighted ** 2)) + 1e-12)
     db_spl = 20.0 * np.log10(rms_c) + 94.0
 
-    # 2. Welch Power Spectral Density with 1/f Pink-Noise Tilt Compensation
-    nperseg = min(len(band_audio), 4096)
-    if nperseg >= 256:
-        freqs, psd = signal.welch(band_audio, fs=sample_rate, nperseg=nperseg)
-        # Compensate for 1/f pink noise slope so a flat room response has a flat spectrum
-        pink_comp_psd = psd * np.maximum(freqs, 1.0)
-        mask = (freqs >= freq_low * 1.15) & (freqs <= freq_high * 0.85)
-        if np.any(mask):
-            band_freqs = freqs[mask]
-            band_amp = np.sqrt(pink_comp_psd[mask])
-        else:
-            band_freqs = freqs[1:]
-            band_amp = np.sqrt(pink_comp_psd[1:])
+    # 2. Harmonic Balance Analysis across the musical chime's note frequencies
+    ch_info = next((c for c in Q930_CHANNELS if c["id"] == channel_id), None)
+    harmonics = ch_info["harmonics"] if ch_info else [300.0, 500.0, 1000.0, 2000.0]
 
-        peak_idx = int(np.argmax(band_amp))
-        peak_freq = float(band_freqs[peak_idx])
-        peak_mag = float(band_amp[peak_idx])
-        median_mag = float(np.median(band_amp) + 1e-12)
-        resonance_ratio = peak_mag / median_mag
-        peak_over_median_db = 20.0 * np.log10(max(resonance_ratio, 1.0))
+    n_fft = min(len(band_audio), 8192)
+    if n_fft >= 512:
+        win = np.hanning(n_fft)
+        spec = np.abs(np.fft.rfft(band_audio[-n_fft:] * win))
+        freqs = np.fft.rfftfreq(n_fft, d=1.0 / sample_rate)
+
+        harm_amps = []
+        for hf in harmonics:
+            # Measure peak amplitude within +-6% of each musical harmonic note
+            mask = (freqs >= hf * 0.94) & (freqs <= hf * 1.06)
+            if np.any(mask):
+                harm_amps.append((hf, float(np.max(spec[mask]))))
+
+        if harm_amps:
+            amps = np.array([a for _, a in harm_amps]) + 1e-12
+            peak_idx = int(np.argmax(amps))
+            peak_freq = float(harm_amps[peak_idx][0])
+            peak_mag = float(amps[peak_idx])
+            median_mag = float(np.median(amps))
+            resonance_ratio = peak_mag / median_mag
+            peak_over_median_db = 20.0 * np.log10(max(resonance_ratio, 1.0))
+        else:
+            peak_freq = 0.0
+            resonance_ratio = 1.0
+            peak_over_median_db = 0.0
     else:
         peak_freq = 0.0
         resonance_ratio = 1.0
@@ -328,18 +362,17 @@ def analyze_recorded_channel_audio(wav_bytes, freq_low=25, freq_high=8000):
     peak_amp = float(np.max(np.abs(band_audio)) + 1e-12)
     crest_factor_db = 20.0 * np.log10(peak_amp / rms_c)
 
-    # A channel causes "hitting" ear fatigue if a narrow resonant peak spikes > 9.5 dB
-    # above the pink-compensated median or if transients spike > 16.5 dB crest
-    is_harsh = bool(peak_over_median_db > 9.5 or crest_factor_db > 16.5)
+    # Flag if one musical note resonates > 8.5 dB above the rest of the chord
+    is_harsh = bool(peak_over_median_db > 8.5 or crest_factor_db > 16.5)
 
-    harsh_reason = "Clean response"
-    if peak_over_median_db > 9.5:
+    harsh_reason = "Clean musical response"
+    if peak_over_median_db > 8.5:
         if peak_freq < 120:
-            harsh_reason = f"Boomy room standing wave at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB spike)"
+            harsh_reason = f"Boomy bass resonance at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB spike)"
         else:
-            harsh_reason = f"Harsh reflective spike at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB spike)"
+            harsh_reason = f"Harsh note spike at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB spike)"
     elif crest_factor_db > 16.5:
-        harsh_reason = f"Sharp transient peaks (Crest {crest_factor_db:.1f} dB)"
+        harsh_reason = f"Sharp transient peak (Crest {crest_factor_db:.1f} dB)"
 
     return {
         "db_level": round(float(db_spl), 1),

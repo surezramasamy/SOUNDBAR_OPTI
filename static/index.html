@@ -213,7 +213,7 @@
       const micLabel = document.getElementById('liveMicLabel');
       const micBar = document.getElementById('liveMicBar');
 
-      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Testing'}: ${ch.name}...`;
+      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Ding-Dong Chime'}: ${ch.name}...`;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {

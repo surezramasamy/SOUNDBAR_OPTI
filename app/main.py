@@ -112,7 +112,8 @@ async def analyze_channel(
         metrics = analyze_recorded_channel_audio(
             wav_content,
             freq_low=ch_info["freq_low"],
-            freq_high=ch_info["freq_high"]
+            freq_high=ch_info["freq_high"],
+            channel_id=channel_id
         )
     except Exception as e:
         raise HTTPException(status_code=422, detail=f"Error analyzing audio: {str(e)}")
