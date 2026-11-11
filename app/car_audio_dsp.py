@@ -11,11 +11,15 @@ PIONEER_XOVER_STEPS = [50, 63, 80, 100, 125, 160, 200]
 # Official Pioneer DMH-Z5290BT 13-Band Graphic EQ Centers (Hz)
 PIONEER_13BAND_EQ = [50, 80, 125, 200, 315, 500, 800, 1250, 2000, 3150, 5000, 8000, 12500]
 
-# Pioneer DMH-Z5290BT 4 Speakers + 1 Subwoofer + Crossover Blend Map
+# Pioneer DMH-Z5290BT Standard Mode:
+# - Front Left / Right: 2-Way Component (Door Mid-Woofer + Tweeter on passive crossover, no separate tweeter channel)
+# - Rear Left / Right: Coaxial Speakers
+# - Subwoofer: L/R Sub Output
 CAR_CHANNELS = [
     {
         "id": "front_left",
-        "name": "1. Front Left Speaker (FL)",
+        "name": "1. Front Left — 2-Way Component (Mid + Tweeter)",
+        "speaker_type": "2-Way Component (Passive Crossover)",
         "pioneer_menu": "Audio -> Speaker Level -> Front Left",
         "xover_menu": "Audio -> Crossover -> Front HPF",
         "pan": "left",
@@ -23,13 +27,15 @@ CAR_CHANNELS = [
         "max_db": 10,
         "target_offset_db": 0.0,
         "freq_low": 55,
-        "freq_high": 4500,
-        "harmonics": [63.0, 80.0, 100.0, 125.0, 250.0, 500.0, 1000.0, 2500.0],
-        "desc": "100% Left-panned musical Ding-Dong + low-mid check (63-2500 Hz). Measures FL level & door bass limit."
+        "freq_high": 9000,
+        # Spans Door Mid-Woofer (63-1250 Hz) + Component Tweeter (3150-8000 Hz) matching Pioneer 13-band EQ
+        "harmonics": [63.0, 80.0, 125.0, 250.0, 500.0, 1250.0, 3150.0, 5000.0, 8000.0],
+        "desc": "100% Left-panned chime. Tests FL Door Mid-Woofer + FL Tweeter together, sets FL dB, Front HPF & Tweeter EQ."
     },
     {
         "id": "front_right",
-        "name": "2. Front Right Speaker (FR)",
+        "name": "2. Front Right — 2-Way Component (Mid + Tweeter)",
+        "speaker_type": "2-Way Component (Passive Crossover)",
         "pioneer_menu": "Audio -> Speaker Level -> Front Right",
         "xover_menu": "Audio -> Crossover -> Front HPF",
         "pan": "right",
@@ -37,13 +43,14 @@ CAR_CHANNELS = [
         "max_db": 10,
         "target_offset_db": 0.0,
         "freq_low": 55,
-        "freq_high": 4500,
-        "harmonics": [63.0, 80.0, 100.0, 125.0, 250.0, 500.0, 1000.0, 2500.0],
-        "desc": "100% Right-panned musical Ding-Dong + low-mid check. Balances FR to match FL at driver's ear."
+        "freq_high": 9000,
+        "harmonics": [63.0, 80.0, 125.0, 250.0, 500.0, 1250.0, 3150.0, 5000.0, 8000.0],
+        "desc": "100% Right-panned chime. Balances FR Component (Mid + Tweeter) to match FL at driver's headrest."
     },
     {
         "id": "rear_left",
-        "name": "3. Rear Left Speaker (RL)",
+        "name": "3. Rear Left — Coaxial Speaker (RL)",
+        "speaker_type": "Coaxial 2-in-1 Speaker",
         "pioneer_menu": "Audio -> Speaker Level -> Rear Left",
         "xover_menu": "Audio -> Crossover -> Rear HPF",
         "pan": "rear_left",
@@ -51,13 +58,14 @@ CAR_CHANNELS = [
         "max_db": 10,
         "target_offset_db": -2.0,
         "freq_low": 65,
-        "freq_high": 4000,
-        "harmonics": [80.0, 100.0, 125.0, 160.0, 315.0, 630.0, 1250.0, 2500.0],
-        "desc": "Left-panned chime. Tip: Temporarily fade Pioneer to Rear while testing RL/RR, or test in place (-2 dB target)."
+        "freq_high": 7000,
+        "harmonics": [80.0, 100.0, 125.0, 250.0, 500.0, 1250.0, 3150.0, 5000.0],
+        "desc": "100% Left-panned chime. Set Pioneer Fader to Rear during RL/RR test to isolate coaxials, then return Fader to 0."
     },
     {
         "id": "rear_right",
-        "name": "4. Rear Right Speaker (RR)",
+        "name": "4. Rear Right — Coaxial Speaker (RR)",
+        "speaker_type": "Coaxial 2-in-1 Speaker",
         "pioneer_menu": "Audio -> Speaker Level -> Rear Right",
         "xover_menu": "Audio -> Crossover -> Rear HPF",
         "pan": "rear_right",
@@ -65,13 +73,14 @@ CAR_CHANNELS = [
         "max_db": 10,
         "target_offset_db": -2.0,
         "freq_low": 65,
-        "freq_high": 4000,
-        "harmonics": [80.0, 100.0, 125.0, 160.0, 315.0, 630.0, 1250.0, 2500.0],
-        "desc": "Right-panned chime. Matched to RL at -2 dB below front stage so vocals stay in front of you."
+        "freq_high": 7000,
+        "harmonics": [80.0, 100.0, 125.0, 250.0, 500.0, 1250.0, 3150.0, 5000.0],
+        "desc": "100% Right-panned chime. Balances RR Coaxial to RL (-2 dB rear fill) and sets Rear HPF cutoff."
     },
     {
         "id": "subwoofer",
-        "name": "5. Subwoofer (SW)",
+        "name": "5. Subwoofer (Sub L/R Pre-Out)",
+        "speaker_type": "Subwoofer (Mono / Bridged Amp)",
         "pioneer_menu": "Audio -> Speaker Level -> Subwoofer",
         "xover_menu": "Audio -> Crossover -> Subwoofer LPF",
         "pan": "sub",
@@ -85,7 +94,8 @@ CAR_CHANNELS = [
     },
     {
         "id": "crossover_blend",
-        "name": "6. Crossover & Phase Blend (Sub + Doors)",
+        "name": "6. Crossover & Phase Blend (Components + Coaxials + Sub)",
+        "speaker_type": "Full System 4.1 Transition",
         "pioneer_menu": "Audio -> Crossover -> Sub Phase (Normal/Reverse)",
         "xover_menu": "HPF / LPF Transition (50 - 125 Hz)",
         "pan": "stereo",
@@ -95,17 +105,18 @@ CAR_CHANNELS = [
         "freq_low": 40,
         "freq_high": 160,
         "harmonics": [40.0, 50.0, 63.0, 80.0, 100.0, 125.0, 160.0, 200.0],
-        "desc": "Plays crossover transition notes (40-200 Hz) on Sub + Doors together to detect phase cancellation holes."
+        "desc": "Plays 40-200 Hz transition notes on Sub + Door speakers together (Fader = 0) to verify Sub Phase (Normal vs Reverse)."
     }
 ]
 
 
 def generate_car_test_chime(channel_id: str, duration_sec: float = 3.2, sample_rate: int = 44100) -> bytes:
     """
-    Generates a pleasant 'Ding-Dong + Harmonic Chord' WAV tailored to the Pioneer DMH-Z5290BT:
-    - Hard Left (100% L, 0% R) for Front Left / Rear Left
-    - Hard Right (0% L, 100% R) for Front Right / Rear Right
-    - Centered Mono Bass for Subwoofer and Crossover Blend
+    Generates a pleasant 'Ding-Dong + Harmonic Chord' WAV tailored to Pioneer DMH-Z5290BT Standard Mode:
+    - Front Left / Right: Plays Tweeter + Upper-Mid 'Ding' (500-8000 Hz), then Door Mid-Woofer 'Dong' (63-500 Hz),
+      then full 9-harmonic chord spanning both Mid-Woofer and Component Tweeter.
+    - Rear Left / Right: Plays Coaxial 'Ding-Dong + Chord' (80-5000 Hz) panned Left or Right.
+    - Subwoofer / Crossover Blend: Plays deep bass 'Boom-Dum + Bass Chord' on both L+R channels.
     """
     ch_info = next((c for c in CAR_CHANNELS if c["id"] == channel_id), CAR_CHANNELS[0])
     harms = ch_info["harmonics"]
@@ -124,8 +135,9 @@ def generate_car_test_chime(channel_id: str, duration_sec: float = 3.2, sample_r
         dong_freqs = [harms[0], harms[1], harms[2], harms[3]]
         decay = 2.0
     else:
-        ding_freqs = [harms[4], harms[5], harms[6], harms[7]]
-        dong_freqs = [harms[0], harms[1], harms[2], harms[3], harms[4]]
+        # "Ding" tests the Tweeter & Upper-Mid (1.25k - 8k Hz); "Dong" tests the Door Mid-Woofer (63 - 500 Hz)
+        ding_freqs = harms[4:]
+        dong_freqs = harms[:5]
         decay = 3.0
 
     w_ding = [1.0 / (1.0 + 0.2 * i) for i in range(len(ding_freqs))]
@@ -141,7 +153,6 @@ def generate_car_test_chime(channel_id: str, duration_sec: float = 3.2, sample_r
 
     mono_sig = np.concatenate([seg_ding, seg_dong, seg_chord])
 
-    # Apply outer fade
     fade_len = int(sample_rate * 0.05)
     if num_samples > 2 * fade_len:
         env = np.ones(num_samples)
@@ -184,9 +195,12 @@ def generate_car_test_chime(channel_id: str, duration_sec: float = 3.2, sample_r
 
 def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
     """
-    Analyzes recorded phone mic audio for a Pioneer DMH-Z5290BT speaker or subwoofer.
-    Measures C-weighted SPL dB, energy at each Pioneer crossover step (50, 63, 80, 100, 125, 160 Hz),
-    detects door panel rattle / cabin boom / crossover cancellation holes, and returns metrics.
+    Analyzes recorded phone mic audio for Pioneer DMH-Z5290BT in Standard Mode:
+    - Front 2-Way Component: Evaluates overall SPL dB, Door Mid-Woofer HPF cutoff (63/80/100/125 Hz),
+      AND Tweeter-to-Mid-Woofer balance (3.15k/5k/8k Hz vs 250-1.25k Hz) since Tweeter has no separate
+      channel level in Standard Mode (tuned via Pioneer 13-Band EQ or passive crossover switch).
+    - Rear Coaxial: Evaluates Rear SPL dB, Rear HPF cutoff (80/100/125 Hz), and coaxial high-frequency smoothness.
+    - Subwoofer & Crossover Blend: Evaluates Sub SPL dB, Sub LPF cutoff, 50/63/80 Hz cabin boom, and Sub Phase.
     """
     ch_info = next((c for c in CAR_CHANNELS if c["id"] == channel_id), CAR_CHANNELS[0])
     freq_low = ch_info["freq_low"]
@@ -209,7 +223,6 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
 
     if num_channels > 1:
         ch_data = audio.reshape(-1, num_channels)
-        # Pick active channel (since FL/FR are hard-panned L or R)
         s0, s1 = np.std(ch_data[:, 0]), np.std(ch_data[:, 1])
         audio = ch_data[:, 0] if s0 >= s1 else ch_data[:, 1]
 
@@ -220,7 +233,7 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
 
     nyquist = 0.5 * sample_rate
     low = max(18.0, float(freq_low) * 0.75) / nyquist
-    high = min(nyquist - 100.0, float(freq_high) * 1.15) / nyquist
+    high = min(nyquist - 100.0, float(freq_high) * 1.12) / nyquist
     if low < high:
         sos = signal.butter(3, [low, high], btype="bandpass", output="sos")
         band_audio = signal.sosfilt(sos, audio)
@@ -231,10 +244,11 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
     rms_c = float(np.sqrt(np.mean(c_weighted ** 2)) + 1e-12)
     db_spl = 20.0 * np.log10(rms_c) + 94.0
 
-    # FFT analysis across the harmonic chord (last 45% of recording where all harmonics sound together)
+    # FFT analysis across the sustained harmonic chord (last 45% of recording)
     chord_slice = band_audio[int(len(band_audio) * 0.45):]
     n_fft = min(len(chord_slice), 8192)
     band_energies_db = {}
+    harm_dict = {}
 
     if n_fft >= 512:
         win = np.hanning(n_fft)
@@ -247,6 +261,7 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
             if np.any(mask):
                 amp = float(np.max(spec[mask])) + 1e-12
                 harm_amps.append((hf, amp))
+                harm_dict[hf] = amp
                 band_energies_db[str(int(round(hf)))] = round(float(20.0 * np.log10(amp)), 1)
 
         if harm_amps:
@@ -269,46 +284,70 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
     crest_factor_db = 20.0 * np.log10(peak_amp / rms_c)
     is_harsh = bool(peak_over_median_db > 8.5 or crest_factor_db > 16.5)
 
-    # Recommend optimal Pioneer DMH-Z5290BT Crossover (HPF / LPF) for this channel
+    # Calculate Component Tweeter (3.15k-8k Hz) vs Mid-Woofer (250-1.25k Hz) balance
+    mid_amps = [v for f, v in harm_dict.items() if 200 <= f <= 1500]
+    tw_amps = [v for f, v in harm_dict.items() if f >= 3000]
+    if mid_amps and tw_amps:
+        mid_avg = float(np.mean(mid_amps)) + 1e-12
+        tw_avg = float(np.mean(tw_amps)) + 1e-12
+        tweeter_vs_mid_db = round(float(20.0 * np.log10(tw_avg / mid_avg)), 1)
+    else:
+        tweeter_vs_mid_db = 0.0
+
+    tweeter_eq_guide = "Tweeter Balanced (0 dB on 3.15k/5k/8k EQ)"
     if channel_id in ("front_left", "front_right"):
-        if is_harsh and peak_freq <= 125:
+        if tweeter_vs_mid_db > 2.5:
+            eq_cut = max(-6, -int(round(tweeter_vs_mid_db)))
+            tweeter_eq_guide = f"Component Tweeter +{tweeter_vs_mid_db:.1f} dB hot -> Set Pioneer 13-Band EQ (3.15k / 5k / 8k Hz) to {eq_cut} dB (or passive box -3 dB)"
+            is_harsh = True
+        elif tweeter_vs_mid_db < -3.5:
+            eq_boost = min(4, int(round(-tweeter_vs_mid_db * 0.7)))
+            tweeter_eq_guide = f"Component Tweeter -{abs(tweeter_vs_mid_db):.1f} dB recessed -> Boost Pioneer EQ (5k / 8k Hz) by +{eq_boost} dB"
+
+    # Recommend optimal Pioneer DMH-Z5290BT Crossover (HPF / LPF) & Diagnosis
+    if channel_id in ("front_left", "front_right"):
+        if peak_over_median_db > 8.5 and peak_freq <= 125:
             rec_hpf = 100 if peak_freq <= 90 else 125
-            rec_slope = "-24 dB/oct"
-            diagnosis = f"Door resonance/rattle at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB) -> Raise Front HPF to {rec_hpf} Hz"
-        elif dip_below_median_db > 9.0 and dip_freq >= 80:
-            rec_hpf = 100
+            rec_slope = "-18 dB/oct"
+            diagnosis = f"Door woofer resonance at {peak_freq:.0f} Hz -> Raise Front HPF to {rec_hpf} Hz ({rec_slope})"
+        elif tweeter_vs_mid_db > 2.5:
+            rec_hpf = 80
             rec_slope = "-12 dB/oct"
-            diagnosis = f"Weak door midbass below 100 Hz -> Set Front HPF to 100 Hz"
+            diagnosis = f"Component Tweeter is +{tweeter_vs_mid_db:.1f} dB hotter than Mid-Woofer -> Cut 3.15k/5k/8k Hz on Pioneer EQ"
         else:
             rec_hpf = 80
             rec_slope = "-12 dB/oct"
-            diagnosis = "Clean door response -> Standard 80 Hz HPF (-12 dB/oct)"
+            diagnosis = f"2-Way Component balanced (Tweeter/Mid delta {tweeter_vs_mid_db:+.1f} dB) -> Front HPF 80 Hz (-12 dB/oct)"
         xover_rec = f"Front HPF: {rec_hpf} Hz ({rec_slope})"
 
     elif channel_id in ("rear_left", "rear_right"):
-        if is_harsh and peak_freq <= 140:
+        if peak_over_median_db > 8.5 and peak_freq <= 140:
             rec_hpf = 100 if peak_freq <= 100 else 125
-            rec_slope = "-18 dB/oct"
-            diagnosis = f"Rear door boom at {peak_freq:.0f} Hz -> Raise Rear HPF to {rec_hpf} Hz"
+            rec_slope = "-12 dB/oct"
+            diagnosis = f"Rear coaxial bass boom at {peak_freq:.0f} Hz -> Set Rear HPF to {rec_hpf} Hz ({rec_slope})"
         else:
             rec_hpf = 80
             rec_slope = "-12 dB/oct"
-            diagnosis = "Clean rear fill -> Standard 80 Hz HPF (-12 dB/oct)"
+            diagnosis = "Rear coaxial clean -> Set Rear HPF to 80 Hz (-12 dB/oct) so coaxial tweeter stays clear"
         xover_rec = f"Rear HPF: {rec_hpf} Hz ({rec_slope})"
+        tweeter_eq_guide = f"Coaxial HF/Mid balance: {tweeter_vs_mid_db:+.1f} dB"
 
     elif channel_id == "subwoofer":
         if is_harsh and peak_freq >= 80:
             rec_lpf = 63
             rec_slope = "-24 dB/oct"
             diagnosis = f"Upper-bass boom at {peak_freq:.0f} Hz -> Lower Sub LPF to 63 Hz (-24 dB/oct)"
+            tweeter_eq_guide = f"Cut {int(peak_freq)} Hz on Pioneer 13-Band EQ by -3 dB"
         elif is_harsh and peak_freq < 80:
             rec_lpf = 80
             rec_slope = "-24 dB/oct"
             diagnosis = f"Cabin standing-wave boom at {peak_freq:.0f} Hz -> Cut {peak_freq:.0f} Hz on Pioneer 13-Band EQ by -3 dB"
+            tweeter_eq_guide = f"Cut {int(peak_freq)} Hz on Pioneer 13-Band EQ by -3 dB"
         else:
             rec_lpf = 80
             rec_slope = "-18 dB/oct"
             diagnosis = "Clean deep bass -> Set Sub LPF to 80 Hz (-18 dB/oct)"
+            tweeter_eq_guide = "Sub EQ flat (0 dB at 50 / 80 Hz)"
         xover_rec = f"Sub LPF: {rec_lpf} Hz ({rec_slope})"
 
     else:  # crossover_blend
@@ -321,7 +360,8 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
             diagnosis = f"Crossover overlap boom at {peak_freq:.0f} Hz (+{peak_over_median_db:.1f} dB) -> Steepen HPF/LPF slope to -24 dB/oct"
         else:
             xover_rec = "Sub Phase: Optimal (Keep current Normal/Reverse)"
-            diagnosis = "Smooth 50-125 Hz transition between Subwoofer and Door Speakers!"
+            diagnosis = "Smooth 50-125 Hz transition between Subwoofer, Front Components & Rear Coaxials!"
+        tweeter_eq_guide = "Phase & Crossover transition verified"
 
     return {
         "db_level": round(float(db_spl), 1),
@@ -329,6 +369,8 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
         "dip_frequency_hz": round(dip_freq, 0),
         "peak_spike_db": round(float(peak_over_median_db), 1),
         "dip_depth_db": round(float(dip_below_median_db), 1),
+        "tweeter_vs_mid_db": tweeter_vs_mid_db,
+        "tweeter_eq_guide": tweeter_eq_guide,
         "is_harsh": is_harsh,
         "xover_recommendation": xover_rec,
         "diagnosis": diagnosis,

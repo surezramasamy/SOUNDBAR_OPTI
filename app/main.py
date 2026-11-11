@@ -362,6 +362,7 @@ def calculate_car_calibration():
     rear_hpf_rec = "80 Hz (-12 dB/oct)"
     sub_lpf_rec = "80 Hz (-18 dB/oct)"
     sub_phase_rec = "Normal (0°)"
+    front_tweeter_eq_rec = "0 dB at 3.15k / 5k / 8k Hz"
 
     for ch in CAR_CHANNELS:
         ch_id = ch["id"]
@@ -380,7 +381,7 @@ def calculate_car_calibration():
             raw_delta = target_db - measured_db
             if init_data["is_harsh"] and ch_id == "subwoofer":
                 raw_delta -= 2.0
-            elif init_data["is_harsh"]:
+            elif init_data["is_harsh"] and ch_id in ("rear_left", "rear_right"):
                 raw_delta -= 1.0
 
             req_step = int(round(raw_delta))
@@ -389,6 +390,7 @@ def calculate_car_calibration():
 
         if ch_id in ("front_left", "front_right"):
             front_hpf_rec = init_data["xover_recommendation"]
+            front_tweeter_eq_rec = init_data.get("tweeter_eq_guide", front_tweeter_eq_rec)
         elif ch_id in ("rear_left", "rear_right"):
             rear_hpf_rec = init_data["xover_recommendation"]
         elif ch_id == "subwoofer":
@@ -420,6 +422,7 @@ def calculate_car_calibration():
 
         results[ch_id] = {
             "name": ch["name"],
+            "speaker_type": ch.get("speaker_type", ""),
             "pioneer_menu": ch["pioneer_menu"],
             "xover_menu": ch["xover_menu"],
             "target_db": round(float(target_db), 1),
@@ -427,6 +430,8 @@ def calculate_car_calibration():
             "required_pioneer_db": req_step,
             "required_action_text": action_text,
             "xover_recommendation": init_data["xover_recommendation"],
+            "tweeter_vs_mid_db": init_data.get("tweeter_vs_mid_db", 0.0),
+            "tweeter_eq_guide": init_data.get("tweeter_eq_guide", ""),
             "is_harsh": init_data["is_harsh"],
             "peak_freq_hz": init_data["peak_frequency_hz"],
             "dip_freq_hz": init_data["dip_frequency_hz"],
@@ -441,7 +446,8 @@ def calculate_car_calibration():
             "front_hpf": front_hpf_rec,
             "rear_hpf": rear_hpf_rec,
             "sub_lpf": sub_lpf_rec,
-            "sub_phase": sub_phase_rec
+            "sub_phase": sub_phase_rec,
+            "front_tweeter_eq": front_tweeter_eq_rec
         },
         "channels": results
     }

@@ -64,15 +64,18 @@
     <a href="/car" class="nav-link active">🚗 Pioneer DMH-Z5290BT (Car 4.1)</a>
   </div>
 
-  <h2>Pioneer DMH-Z5290BT Calibrator <span class="badge">4 SPEAKERS + 1 SUB</span></h2>
+  <h2>Pioneer DMH-Z5290BT (Standard Mode) <span class="badge">FRONT COMPONENT + REAR COAX + SUB</span></h2>
 
   <div class="card">
-    <h3>Step 1: Pioneer DMH-Z5290BT Pre-Test Setup</h3>
+    <h3>Step 1: Pioneer Standard Mode Pre-Test Setup</h3>
     <ol class="checklist">
       <li>Connect your phone to the <b>Pioneer DMH-Z5290BT</b> via <b>Bluetooth</b> or <b>Android Auto / CarPlay</b>.</li>
-      <li>On the Pioneer touchscreen, go to <b>Settings ⚙️ $\to$ Audio $\to$ Speaker Level</b> and set all 5 channels (FL, FR, RL, RR, Sub) to <b>0 dB</b>.</li>
-      <li>Turn <b>Loudness OFF</b>, <b>Bass Boost = 0</b>, and set Master Volume to <b>24–28</b> (clean listening volume).</li>
-      <li>Sit in the driver's seat, hold the phone at <b>ear height (driver's headrest)</b>, and tap <b>Test All Car Channels</b>.</li>
+      <li>Go to <b>Settings ⚙️ $\to$ Audio $\to$ Speaker Level</b> and set all 5 channels (<b>Front Left, Front Right, Rear Left, Rear Right, Subwoofer</b>) to <b>0 dB</b>.</li>
+      <li>Since your <b>Front is a 2-Way Component</b> (Mid + Tweeter on one channel) and <b>Rear is Coaxial</b>:
+        <br>• Keep <b>Fader = 0 (Center)</b> when testing <b>Front Left / Front Right / Subwoofer</b>.
+        <br>• Temporarily set <b>Pioneer Fader = Rear</b> when testing <b>Rear Left / Rear Right</b> so only the rear coaxials play, then return Fader to 0.
+      </li>
+      <li>Hold the phone at <b>ear height at the driver's headrest</b> and tap <b>Test All Car Channels</b> (or test each channel individually).</li>
     </ol>
 
     <div class="meter-wrap">
@@ -92,15 +95,15 @@
   </div>
 
   <div id="xoverSummaryCard" class="card" style="display:none;">
-    <h3>Recommended Pioneer DMH-Z5290BT Crossover Summary</h3>
-    <div style="font-size:12px; color:var(--muted);">Set these inside <b>Settings ⚙️ $\to$ Audio $\to$ Crossover (HPF / Subwoofer)</b>:</div>
+    <h3>Recommended Pioneer DMH-Z5290BT Crossover & Tweeter EQ Summary</h3>
+    <div style="font-size:12px; color:var(--muted);">Set these inside <b>Settings ⚙️ $\to$ Audio $\to$ Crossover</b> and <b>13-Band Graphic EQ</b>:</div>
     <div class="xover-grid">
       <div class="xover-item">
-        <div class="xover-label">Front Door Speakers (HPF)</div>
+        <div class="xover-label">Front 2-Way Component (HPF)</div>
         <div class="xover-val" id="sumFrontHpf">--</div>
       </div>
       <div class="xover-item">
-        <div class="xover-label">Rear Door Speakers (HPF)</div>
+        <div class="xover-label">Rear Coaxial Speakers (HPF)</div>
         <div class="xover-val" id="sumRearHpf">--</div>
       </div>
       <div class="xover-item">
@@ -110,6 +113,10 @@
       <div class="xover-item">
         <div class="xover-label">Subwoofer Phase & Blend</div>
         <div class="xover-val" id="sumSubPhase">--</div>
+      </div>
+      <div class="xover-item" style="grid-column: span 2;">
+        <div class="xover-label">Front Component Tweeter Balance (Since Standard Mode has no Tweeter channel)</div>
+        <div class="xover-val" id="sumTweeterEq" style="color:var(--primary);">--</div>
       </div>
     </div>
   </div>
@@ -139,6 +146,7 @@
         document.getElementById('sumRearHpf').innerText = g.rear_hpf;
         document.getElementById('sumSubLpf').innerText = g.sub_lpf;
         document.getElementById('sumSubPhase').innerText = g.sub_phase;
+        document.getElementById('sumTweeterEq').innerText = g.front_tweeter_eq || '0 dB at 3.15k / 5k / 8k Hz';
       } else {
         xCard.style.display = 'none';
       }
@@ -176,6 +184,7 @@
                   Measured at Driver Ear: <b>${res.initial_measured_db} dB</b> | Target: <b>${res.target_db} dB</b>
                 </div>
                 <div style="margin-top:4px;">${diagBadge}</div>
+                ${res.tweeter_eq_guide ? `<div style="margin-top:4px; font-size:11px; color:var(--primary); font-family:monospace;">🎚️ ${res.tweeter_eq_guide}</div>` : ''}
               </div>
               <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
                 ${!isBlend ? `<span class="pill ${reqClass}">Set Speaker Level: ${res.required_action_text}</span>` : ''}
