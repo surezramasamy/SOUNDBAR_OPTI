@@ -2,16 +2,19 @@ package com.soundbaropti.livesub
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
+import android.provider.Settings
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -22,15 +25,43 @@ import android.widget.TextView
 class MainActivity : Activity() {
 
     private lateinit var statusBadge: TextView
-    private lateinit var bassValText: TextView
-    private lateinit var midValText: TextView
-    private lateinit var cutValText: TextView
-    private lateinit var sessionText: TextView
-    private lateinit var bassProgress: ProgressBar
-    private lateinit var cutProgress: ProgressBar
+    private lateinit var passThroughBadge: TextView
+    private lateinit var songTitleText: TextView
+    private lateinit var songArtistText: TextView
+    private lateinit var playPauseBtn: Button
+    private lateinit var enableNotifBtn: Button
+    private lateinit var bypassBtn: Button
     private lateinit var toggleBtn: Button
+
+    // Preset buttons
+    private lateinit var presetVelvetBtn: Button
+    private lateinit var presetSurroundBtn: Button
+    private lateinit var presetVocalBtn: Button
+    private lateinit var presetLoudnessBtn: Button
+
+    // 5-Zone Live Meters
+    private lateinit var deepSubValText: TextView
+    private lateinit var deepSubProgress: ProgressBar
+    private lateinit var hitBassValText: TextView
+    private lateinit var hitBassProgress: ProgressBar
+    private lateinit var cutValText: TextView
+    private lateinit var cutProgress: ProgressBar
+    private lateinit var midValText: TextView
+    private lateinit var midProgress: ProgressBar
+    private lateinit var highValText: TextView
+    private lateinit var thdBadgeText: TextView
+
+    // Auto-Calibration UI
+    private lateinit var autoCalBtn: Button
+    private lateinit var calStatusText: TextView
+    private lateinit var calReportText: TextView
+
+    // Sliders
+    private lateinit var deepWarmthLabel: TextView
     private lateinit var threshValueLabel: TextView
     private lateinit var maxCutValueLabel: TextView
+    private lateinit var surroundLabel: TextView
+    private lateinit var tweeterLabel: TextView
 
     private val uiHandler = Handler(Looper.getMainLooper())
     private val updateRunnable = object : Runnable {
@@ -48,6 +79,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        NowPlayingListenerService.refreshFromMediaSessionManager(this)
         uiHandler.post(updateRunnable)
     }
 
@@ -86,44 +118,182 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun refreshMeters() {
-        val running = LiveSubPassThroughService.isRunning
-        statusBadge.text = if (running) "● ACTIVE (BACKGROUND + ANDROID AUTO)" else "○ STOPPED"
-        statusBadge.setTextColor(if (running) Color.parseColor("#3FB950") else Color.parseColor("#8B949E"))
-
-        toggleBtn.text = if (running) "⏹ STOP LIVE WOOFER GUARD" else "▶ START LIVE WOOFER GUARD"
-        val btnBg = GradientDrawable().apply {
-            cornerRadius = 24f
-            setColor(if (running) Color.parseColor("#F85149") else Color.parseColor("#3FB950"))
+    private fun triggerAutoCalibration() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestNeededPermissions()
+            return
         }
-        toggleBtn.background = btnBg
-        toggleBtn.setTextColor(if (running) Color.WHITE else Color.BLACK)
-
-        val subDb = LiveSubPassThroughService.liveSubDb
-        val midDb = LiveSubPassThroughService.liveMidDb
-        val cutDb = LiveSubPassThroughService.liveCutDb
-
-        bassValText.text = "%.1f dB".format(subDb)
-        midValText.text = "%.1f dB".format(midDb)
-        cutValText.text = "%.1f dB".format(cutDb)
-        cutValText.setTextColor(if (cutDb < -1.0f) Color.parseColor("#FF7B00") else Color.parseColor("#3FB950"))
-
-        bassProgress.progress = ((subDb - 35f) / 60f * 100f).toInt().coerceIn(0, 100)
-        cutProgress.progress = (kotlin.math.abs(cutDb) / LiveSubPassThroughService.maxSubCutDb * 100f).toInt().coerceIn(0, 100)
-
-        val pkgs = LiveSubPassThroughService.activePackages.values.distinct()
-        sessionText.text = if (pkgs.isEmpty()) {
-            "Intercepting: Global Output Mix (Start playing a song in Spotify / YouTube Music)"
+        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_RUN_SWEEP
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
         } else {
-            "Intercepting Active Players: ${pkgs.joinToString(", ")}"
+            startService(intent)
         }
     }
 
+    private fun openNotificationAccessSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        } catch (_: Exception) {
+            startActivity(Intent(Settings.ACTION_SETTINGS))
+        }
+    }
+
+    private fun openAndroidAutoSettings() {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setPackage("com.google.android.projection.gearhead")
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:com.google.android.projection.gearhead")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            }
+        }
+    }
+
+    private fun refreshMeters() {
+        val running = LiveSubPassThroughService.isRunning
+        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val musicActive = am.isMusicActive || NowPlayingListenerService.isPlaying
+
+        statusBadge.text = if (running) {
+            "● 360° PREMIUM SOUND & SUB GUARD ACTIVE (BACKGROUND + ANDROID AUTO)"
+        } else {
+            "○ ENGINE STOPPED — TAP START BELOW"
+        }
+        statusBadge.setTextColor(if (running) Color.parseColor("#3FB950") else Color.parseColor("#8B949E"))
+
+        // Now Playing & Pass-Through Proof Card
+        val notifGranted = NowPlayingListenerService.isNotificationAccessGranted(this)
+        enableNotifBtn.visibility = if (notifGranted) android.view.View.GONE else android.view.View.VISIBLE
+
+        val appName = NowPlayingListenerService.currentAppName
+        val pulse = LiveSubPassThroughService.passThroughPulse
+        passThroughBadge.text = when {
+            !running -> "⚪ PASS-THROUGH STANDBY • Start Optimizer to Intercept Audio"
+            LiveSubPassThroughService.isBypassed -> "🟠 A/B BYPASS MODE ACTIVE • Raw Unprocessed Audio ($appName)"
+            musicActive -> "🟢 PASS-THROUGH LOCKED & STREAMING • $appName (DSP Frame #$pulse)"
+            else -> "🟢 PASS-THROUGH READY • Waiting for Play in $appName (Frame #$pulse)"
+        }
+        passThroughBadge.setTextColor(
+            when {
+                !running -> Color.parseColor("#8B949E")
+                LiveSubPassThroughService.isBypassed -> Color.parseColor("#D29922")
+                else -> Color.parseColor("#3FB950")
+            }
+        )
+
+        songTitleText.text = if (NowPlayingListenerService.currentTitle == "Waiting for Music Player..." && musicActive) {
+            "🎵 Active Music Stream Detected ($appName)"
+        } else {
+            "🎵 ${NowPlayingListenerService.currentTitle}"
+        }
+
+        val albumPart = if (NowPlayingListenerService.currentAlbum.isNotBlank()) " • ${NowPlayingListenerService.currentAlbum}" else ""
+        songArtistText.text = if (!notifGranted && NowPlayingListenerService.currentTitle == "Waiting for Music Player...") {
+            "Tap 'Enable Song Title Sync' below to display exact Spotify / YouTube Music track info"
+        } else {
+            "${NowPlayingListenerService.currentArtist}$albumPart ($appName)"
+        }
+
+        playPauseBtn.text = if (musicActive) "⏸ Pause" else "▶ Play"
+
+        // Bypass button state
+        val bypassed = LiveSubPassThroughService.isBypassed
+        bypassBtn.text = if (bypassed) {
+            "🔊 A/B MODE: RAW BYPASS (Tap to Re-Enable 360° Deep Velvet DSP)"
+        } else {
+            "🔊 A/B TEST: 360° PREMIUM DSP ON (Tap to Compare Raw Unprocessed)"
+        }
+        bypassBtn.background = roundedBg(if (bypassed) "#D29922" else "#21262D", "#58A6FF")
+        bypassBtn.setTextColor(if (bypassed) Color.BLACK else Color.parseColor("#58A6FF"))
+
+        // Start/Stop button
+        toggleBtn.text = if (running) "⏹ STOP 360° LIVE SOUND OPTIMIZER" else "▶ START 360° LIVE SOUND & SUB OPTIMIZER"
+        toggleBtn.background = roundedBg(if (running) "#F85149" else "#3FB950")
+        toggleBtn.setTextColor(if (running) Color.WHITE else Color.BLACK)
+
+        // Highlight active preset button
+        val prof = LiveSubPassThroughService.soundProfile
+        stylePresetBtn(presetVelvetBtn, prof == "DEEP_VELVET")
+        stylePresetBtn(presetSurroundBtn, prof == "SURROUND_360")
+        stylePresetBtn(presetVocalBtn, prof == "PURE_VOCAL")
+        stylePresetBtn(presetLoudnessBtn, prof == "LOUDNESS_RICH")
+
+        // 5-Zone Live Meters
+        val deepDb = LiveSubPassThroughService.liveDeepSubDb
+        val deepGain = LiveSubPassThroughService.liveDeepGainDb
+        val hitDb = LiveSubPassThroughService.liveSubDb
+        val cutDb = LiveSubPassThroughService.liveCutDb
+        val midDb = LiveSubPassThroughService.liveMidDb
+        val midGain = LiveSubPassThroughService.liveMidGainDb
+        val highDb = LiveSubPassThroughService.liveHighDb
+        val highGain = LiveSubPassThroughService.liveHighGainDb
+        val thd = LiveSubPassThroughService.liveDistortionPct
+
+        deepSubValText.text = "%.1f dB  (Velvet Boost: %+.1f dB)".format(deepDb, deepGain)
+        deepSubProgress.progress = ((deepDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
+
+        hitBassValText.text = "%.1f dB".format(hitDb)
+        hitBassProgress.progress = ((hitDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
+
+        cutValText.text = "%.1f dB Anti-Hit Cut".format(cutDb)
+        cutValText.setTextColor(if (cutDb < -4.0f) Color.parseColor("#FF7B00") else Color.parseColor("#3FB950"))
+        cutProgress.progress = (kotlin.math.abs(cutDb) / LiveSubPassThroughService.maxSubCutDb * 100f).toInt().coerceIn(0, 100)
+
+        midValText.text = "%.1f dB  (360° Stage: %+.1f dB)".format(midDb, midGain)
+        midProgress.progress = ((midDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
+
+        highValText.text = "Tweeter Highs: %.1f dB (Silk Trim: %+.1f dB)".format(highDb, highGain)
+        thdBadgeText.text = "Distortion Guard: %.1f%% THD • 100%% CLIP-FREE HEADROOM".format(thd)
+        thdBadgeText.setTextColor(if (thd > 1.8f) Color.parseColor("#D29922") else Color.parseColor("#3FB950"))
+
+        // Auto-Calibration Status
+        calStatusText.text = LiveSubPassThroughService.calibrationStatus
+        calReportText.text = LiveSubPassThroughService.calRecommendation
+        autoCalBtn.isEnabled = !LiveSubPassThroughService.isCalibrating
+        autoCalBtn.text = if (LiveSubPassThroughService.isCalibrating) {
+            "⏳ MEASURING FRONT, REAR & SUB SPEAKERS..."
+        } else {
+            "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"
+        }
+    }
+
+    private fun stylePresetBtn(btn: Button, active: Boolean) {
+        btn.background = roundedBg(
+            if (active) "#58A6FF" else "#21262D",
+            if (active) "#58A6FF" else "#30363D"
+        )
+        btn.setTextColor(if (active) Color.BLACK else Color.WHITE)
+    }
+
+    private fun roundedBg(fillHex: String, strokeHex: String? = null): GradientDrawable =
+        GradientDrawable().apply {
+            cornerRadius = 22f
+            setColor(Color.parseColor(fillHex))
+            if (strokeHex != null) {
+                setStroke(3, Color.parseColor(strokeHex))
+            }
+        }
+
     private fun cardBg(): GradientDrawable = GradientDrawable().apply {
-        cornerRadius = 32f
+        cornerRadius = 30f
         setColor(Color.parseColor("#161B22"))
         setStroke(3, Color.parseColor("#30363D"))
     }
+
+    private fun sectionMargin(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(
+        LinearLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = 28 }
 
     private fun buildUi(): ScrollView {
         val scroll = ScrollView(this).apply {
@@ -132,148 +302,439 @@ class MainActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(42, 56, 42, 56)
+            setPadding(36, 48, 36, 64)
         }
 
         val title = TextView(this).apply {
-            text = "Live Woofer Auto-Guard"
-            textSize = 22f
+            text = "360° Premium Sound & Sub Guard"
+            textSize = 21f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }
         root.addView(title)
 
+        val subtitle = TextView(this).apply {
+            text = "Deep Background Bass Without Hitting • Front + Rear + Sub Live Optimizer"
+            textSize = 12f
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 4, 0, 8)
+        }
+        root.addView(subtitle)
+
         statusBadge = TextView(this).apply {
             text = "○ STOPPED"
-            textSize = 13f
+            textSize = 12f
             setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, 8, 0, 24)
+            setPadding(0, 4, 0, 18)
         }
         root.addView(statusBadge)
 
-        val descCard = LinearLayout(this).apply {
+        // =========================================================================
+        // CARD 1: NOW PLAYING SONG DETAILS & LIVE PASS-THROUGH PROOF
+        // =========================================================================
+        val nowPlayingCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = cardBg()
-            setPadding(36, 32, 36, 32)
+            setPadding(32, 28, 32, 28)
         }
 
-        sessionText = TextView(this).apply {
-            text = "Intercepting: Global Output Mix"
-            textSize = 13f
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 0, 0, 20)
+        passThroughBadge = TextView(this).apply {
+            text = "⚪ PASS-THROUGH STANDBY"
+            textSize = 11.5f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
         }
-        descCard.addView(sessionText)
+        nowPlayingCard.addView(passThroughBadge)
 
-        toggleBtn = Button(this).apply {
-            text = "▶ START LIVE WOOFER GUARD"
-            textSize = 15f
+        songTitleText = TextView(this).apply {
+            text = "🎵 Waiting for Music Player..."
+            textSize = 17f
             setTypeface(typeface, Typeface.BOLD)
-            setPadding(24, 32, 24, 32)
-            setOnClickListener { toggleService() }
+            setTextColor(Color.WHITE)
+            setPadding(0, 12, 0, 4)
         }
-        descCard.addView(toggleBtn)
-        root.addView(descCard)
+        nowPlayingCard.addView(songTitleText)
 
-        val meterCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(36, 32, 36, 32)
+        songArtistText = TextView(this).apply {
+            text = "Play any song in Spotify or YouTube Music"
+            textSize = 13f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 0, 0, 18)
+        }
+        nowPlayingCard.addView(songArtistText)
+
+        // Transport Controls Row (Prev / Play-Pause / Next)
+        val transportRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 3f
+        }
+        val btnLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(6, 0, 6, 0)
+        }
+
+        val prevBtn = Button(this).apply {
+            text = "⏮ Prev"
+            textSize = 13f
+            background = roundedBg("#21262D", "#30363D")
+            setTextColor(Color.WHITE)
+            layoutParams = btnLp
+            setOnClickListener { NowPlayingListenerService.prevTrack(this@MainActivity) }
+        }
+        playPauseBtn = Button(this).apply {
+            text = "⏯ Play/Pause"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#3FB950")
+            setTextColor(Color.BLACK)
+            layoutParams = btnLp
+            setOnClickListener { NowPlayingListenerService.playPause(this@MainActivity) }
+        }
+        val nextBtn = Button(this).apply {
+            text = "⏭ Next"
+            textSize = 13f
+            background = roundedBg("#21262D", "#30363D")
+            setTextColor(Color.WHITE)
+            layoutParams = btnLp
+            setOnClickListener { NowPlayingListenerService.nextTrack(this@MainActivity) }
+        }
+        transportRow.addView(prevBtn)
+        transportRow.addView(playPauseBtn)
+        transportRow.addView(nextBtn)
+        nowPlayingCard.addView(transportRow)
+
+        enableNotifBtn = Button(this).apply {
+            text = "🔔 Enable Song Title & Artist Sync (1-Tap Permission)"
+            textSize = 12f
+            background = roundedBg("#1F2937", "#58A6FF")
+            setTextColor(Color.parseColor("#58A6FF"))
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.topMargin = 32
+            ).apply { topMargin = 16 }
             layoutParams = lp
+            setOnClickListener { openNotificationAccessSettings() }
+        }
+        nowPlayingCard.addView(enableNotifBtn)
+
+        bypassBtn = Button(this).apply {
+            text = "🔊 A/B TEST: 360° PREMIUM DSP ON (Tap to Compare Raw)"
+            textSize = 12f
+            setTypeface(typeface, Typeface.BOLD)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 14 }
+            layoutParams = lp
+            setOnClickListener {
+                LiveSubPassThroughService.isBypassed = !LiveSubPassThroughService.isBypassed
+                refreshMeters()
+            }
+        }
+        nowPlayingCard.addView(bypassBtn)
+        root.addView(nowPlayingCard)
+
+        // =========================================================================
+        // CARD 2: MASTER START / STOP & 4 ONE-TAP PREMIUM SOUND PROFILES
+        // =========================================================================
+        val masterCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
         }
 
-        val bassLabel = TextView(this).apply {
-            text = "CABIN SUB-BASS (30 - 95 Hz)"
+        toggleBtn = Button(this).apply {
+            text = "▶ START 360° LIVE SOUND & SUB OPTIMIZER"
+            textSize = 14.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setPadding(20, 28, 20, 28)
+            setOnClickListener { toggleService() }
+        }
+        masterCard.addView(toggleBtn)
+
+        val presetTitle = TextView(this).apply {
+            text = "ONE-TAP 360° SOUND PROFILES (NO HARD BASS HIT):"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 22, 0, 10)
+        }
+        masterCard.addView(presetTitle)
+
+        val presetRow1 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 2f
+        }
+        val halfLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(6, 6, 6, 6)
+        }
+
+        presetVelvetBtn = Button(this).apply {
+            text = "✨ Deep Velvet\n(No Hard Hit)"
             textSize = 12f
+            layoutParams = halfLp
+            setOnClickListener {
+                LiveSubPassThroughService.applyPreset("DEEP_VELVET")
+                refreshMeters()
+            }
+        }
+        presetSurroundBtn = Button(this).apply {
+            text = "🎭 360° Surround\n(Front + Rear)"
+            textSize = 12f
+            layoutParams = halfLp
+            setOnClickListener {
+                LiveSubPassThroughService.applyPreset("SURROUND_360")
+                refreshMeters()
+            }
+        }
+        presetRow1.addView(presetVelvetBtn)
+        presetRow1.addView(presetSurroundBtn)
+        masterCard.addView(presetRow1)
+
+        val presetRow2 = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 2f
+        }
+        presetVocalBtn = Button(this).apply {
+            text = "💎 Pure Vocal\n& Silk Highs"
+            textSize = 12f
+            layoutParams = halfLp
+            setOnClickListener {
+                LiveSubPassThroughService.applyPreset("PURE_VOCAL")
+                refreshMeters()
+            }
+        }
+        presetLoudnessBtn = Button(this).apply {
+            text = "🔥 Low-Volume\nRich Loudness"
+            textSize = 12f
+            layoutParams = halfLp
+            setOnClickListener {
+                LiveSubPassThroughService.applyPreset("LOUDNESS_RICH")
+                refreshMeters()
+            }
+        }
+        presetRow2.addView(presetVocalBtn)
+        presetRow2.addView(presetLoudnessBtn)
+        masterCard.addView(presetRow2)
+        root.addView(masterCard)
+
+        // =========================================================================
+        // CARD 3: REAL-TIME 5-ZONE ALL-SPEAKER MICROPHONE METERS
+        // =========================================================================
+        val meterCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+
+        val meterHeader = TextView(this).apply {
+            text = "LIVE ALL-SPEAKER MICROPHONE ANALYZER (5 ZONES)"
+            textSize = 12f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 0, 0, 12)
+        }
+        meterCard.addView(meterHeader)
+
+        // Zone 1: Deep Background Sub (28-62 Hz)
+        val deepLabel = TextView(this).apply {
+            text = "1. DEEP BACKGROUND SUB-BASS (28 - 62 Hz • Velvet Cushion)"
+            textSize = 11.5f
             setTextColor(Color.parseColor("#8B949E"))
         }
-        meterCard.addView(bassLabel)
+        meterCard.addView(deepLabel)
 
-        bassValText = TextView(this).apply {
-            text = "40.0 dB"
-            textSize = 26f
+        deepSubValText = TextView(this).apply {
+            text = "42.0 dB  (Velvet Boost: +4.0 dB)"
+            textSize = 18f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+        }
+        meterCard.addView(deepSubValText)
+
+        deepSubProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 25
+        }
+        meterCard.addView(deepSubProgress)
+
+        // Zone 2: Upper-Bass Hard-Hit Zone (70-140 Hz)
+        val hitLabel = TextView(this).apply {
+            text = "2. UPPER-BASS SLAM / HARD-HIT ZONE (70 - 140 Hz • Suppressed)"
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 18, 0, 0)
+        }
+        meterCard.addView(hitLabel)
+
+        hitBassValText = TextView(this).apply {
+            text = "42.0 dB"
+            textSize = 18f
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }
-        meterCard.addView(bassValText)
+        meterCard.addView(hitBassValText)
 
-        bassProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+        hitBassProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progress = 10
+            progress = 20
         }
-        meterCard.addView(bassProgress)
-
-        val midLabel = TextView(this).apply {
-            text = "VOCALS / MIDS (250 - 2000 Hz)"
-            textSize = 12f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 24, 0, 0)
-        }
-        meterCard.addView(midLabel)
-
-        midValText = TextView(this).apply {
-            text = "40.0 dB"
-            textSize = 20f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#C9D1D9"))
-        }
-        meterCard.addView(midValText)
-
-        val cutLabel = TextView(this).apply {
-            text = "LIVE SUBWOOFER REDUCTION APPLIED TO SPOTIFY / AUTO"
-            textSize = 12f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 28, 0, 0)
-        }
-        meterCard.addView(cutLabel)
+        meterCard.addView(hitBassProgress)
 
         cutValText = TextView(this).apply {
-            text = "0.0 dB"
-            textSize = 28f
+            text = "-3.5 dB Anti-Hit Cut"
+            textSize = 20f
             setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
+            setTextColor(Color.parseColor("#FF7B00"))
+            setPadding(0, 6, 0, 0)
         }
         meterCard.addView(cutValText)
 
         cutProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            progress = 0
+            progress = 30
         }
         meterCard.addView(cutProgress)
+
+        // Zone 3: Front & Rear Speakers (Vocals & Surround Stage)
+        val midLabel = TextView(this).apply {
+            text = "3. FRONT COMPONENT + REAR COAXIAL STAGE (200 - 2800 Hz)"
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 18, 0, 0)
+        }
+        meterCard.addView(midLabel)
+
+        midValText = TextView(this).apply {
+            text = "42.0 dB  (360° Stage: +2.5 dB)"
+            textSize = 17f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#58A6FF"))
+        }
+        meterCard.addView(midValText)
+
+        midProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 25
+        }
+        meterCard.addView(midProgress)
+
+        // Zone 4: Tweeters & Distortion Guard
+        highValText = TextView(this).apply {
+            text = "4. Tweeter Highs (3.2 - 12 kHz): 38.0 dB (Silk Trim: -1.0 dB)"
+            textSize = 12.5f
+            setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setPadding(0, 16, 0, 4)
+        }
+        meterCard.addView(highValText)
+
+        thdBadgeText = TextView(this).apply {
+            text = "Distortion Guard: 0.2% THD • 100% CLIP-FREE HEADROOM"
+            textSize = 12f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+        }
+        meterCard.addView(thdBadgeText)
         root.addView(meterCard)
 
+        // =========================================================================
+        // CARD 4: ONE-TAP 360° ALL-SPEAKER AUTO-CALIBRATION (FRONT + REAR + SUB)
+        // =========================================================================
+        val calCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+
+        val calHeader = TextView(this).apply {
+            text = "🎯 360° ALL-SPEAKER AUTO-CALIBRATION (MIC SWEEP)"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+        }
+        calCard.addView(calHeader)
+
+        calStatusText = TextView(this).apply {
+            text = LiveSubPassThroughService.calibrationStatus
+            textSize = 12f
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 6, 0, 12)
+        }
+        calCard.addView(calStatusText)
+
+        autoCalBtn = Button(this).apply {
+            text = "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#58A6FF")
+            setTextColor(Color.BLACK)
+            setPadding(18, 22, 18, 22)
+            setOnClickListener { triggerAutoCalibration() }
+        }
+        calCard.addView(autoCalBtn)
+
+        calReportText = TextView(this).apply {
+            text = LiveSubPassThroughService.calRecommendation
+            textSize = 12f
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setPadding(0, 14, 0, 0)
+        }
+        calCard.addView(calReportText)
+        root.addView(calCard)
+
+        // =========================================================================
+        // CARD 5: FINE-TUNE 360° SOUND & DEEP VELVET SUB SLIDERS
+        // =========================================================================
         val sliderCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = cardBg()
-            setPadding(36, 32, 36, 32)
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.topMargin = 32
-            layoutParams = lp
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
         }
 
-        threshValueLabel = TextView(this).apply {
-            text = "Bass Ceiling Threshold: +4.0 dB above Mids (Lower = Cuts Boom Sooner)"
-            textSize = 13f
+        // Slider 1: Deep Background Sub Warmth (28-60 Hz)
+        deepWarmthLabel = TextView(this).apply {
+            text = "Deep Background Sub Warmth (28-60 Hz): +4.5 dB"
+            textSize = 12.5f
             setTextColor(Color.WHITE)
+        }
+        sliderCard.addView(deepWarmthLabel)
+
+        val deepSeek = SeekBar(this).apply {
+            max = 16 // 0.0 to +8.0 dB
+            progress = 9
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    val db = p * 0.5f
+                    LiveSubPassThroughService.deepSubWarmthDb = db
+                    deepWarmthLabel.text = "Deep Background Sub Warmth (28-60 Hz): %+.1f dB".format(db)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        sliderCard.addView(deepSeek)
+
+        // Slider 2: Upper-Bass Anti-Hit Sensitivity
+        threshValueLabel = TextView(this).apply {
+            text = "Upper-Bass Anti-Hit Ceiling (70-140 Hz): +2.5 dB over Mids"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            setPadding(0, 18, 0, 0)
         }
         sliderCard.addView(threshValueLabel)
 
         val threshSeek = SeekBar(this).apply {
             max = 14
-            progress = 6 // Maps to -2..+12 dB
+            progress = 5
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
                     val db = (p - 2).toFloat()
                     LiveSubPassThroughService.targetBassOverMidsDb = db
-                    threshValueLabel.text = "Bass Ceiling Threshold: %+.1f dB above Mids".format(db)
+                    threshValueLabel.text = "Upper-Bass Anti-Hit Ceiling (70-140 Hz): %+.1f dB over Mids".format(db)
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
@@ -281,22 +742,23 @@ class MainActivity : Activity() {
         }
         sliderCard.addView(threshSeek)
 
+        // Slider 3: Max Anti-Hit Cut Limit
         maxCutValueLabel = TextView(this).apply {
-            text = "Max Subwoofer Cut Limit: -10 dB"
-            textSize = 13f
+            text = "Max Hard-Hit Suppression Limit: -12 dB"
+            textSize = 12.5f
             setTextColor(Color.WHITE)
-            setPadding(0, 24, 0, 0)
+            setPadding(0, 18, 0, 0)
         }
         sliderCard.addView(maxCutValueLabel)
 
         val maxCutSeek = SeekBar(this).apply {
             max = 12
-            progress = 7 // 3..15 dB
+            progress = 9 // 3..15 dB
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
                     val db = (p + 3).toFloat()
                     LiveSubPassThroughService.maxSubCutDb = db
-                    maxCutValueLabel.text = "Max Subwoofer Cut Limit: -%.0f dB".format(db)
+                    maxCutValueLabel.text = "Max Hard-Hit Suppression Limit: -%.0f dB".format(db)
                 }
                 override fun onStartTrackingTouch(s: SeekBar?) {}
                 override fun onStopTrackingTouch(s: SeekBar?) {}
@@ -304,15 +766,91 @@ class MainActivity : Activity() {
         }
         sliderCard.addView(maxCutSeek)
 
-        val autoNote = TextView(this).apply {
-            text = "🚗 Android Auto Ready: Connect your phone to Pioneer DMH-Z5290BT. This service runs in the background while Spotify / YouTube Music plays, and also appears in your Android Auto app launcher."
-            textSize = 12f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 28, 0, 0)
-            gravity = Gravity.START
+        // Slider 4: Front + Rear 360° Vocal & Surround Stage
+        surroundLabel = TextView(this).apply {
+            text = "Front + Rear 360° Vocal Clarity: +2.5 dB"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            setPadding(0, 18, 0, 0)
         }
-        sliderCard.addView(autoNote)
+        sliderCard.addView(surroundLabel)
+
+        val surroundSeek = SeekBar(this).apply {
+            max = 12 // 0.0 to +6.0 dB
+            progress = 5
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    val db = p * 0.5f
+                    LiveSubPassThroughService.surroundClarityDb = db
+                    surroundLabel.text = "Front + Rear 360° Vocal Clarity: %+.1f dB".format(db)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        sliderCard.addView(surroundSeek)
+
+        // Slider 5: Tweeter Anti-Harshness / Silk Smoothness
+        tweeterLabel = TextView(this).apply {
+            text = "Tweeter Anti-Harshness & Silk Control: 2.5 dB"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            setPadding(0, 18, 0, 0)
+        }
+        sliderCard.addView(tweeterLabel)
+
+        val tweeterSeek = SeekBar(this).apply {
+            max = 10 // 0.0 to 5.0 dB
+            progress = 5
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    val db = p * 0.5f
+                    LiveSubPassThroughService.tweeterSmoothDb = db
+                    tweeterLabel.text = "Tweeter Anti-Harshness & Silk Control: %.1f dB".format(db)
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        sliderCard.addView(tweeterSeek)
         root.addView(sliderCard)
+
+        // =========================================================================
+        // CARD 6: ANDROID AUTO LAUNCHER SETUP FOR PIONEER DMH-Z5290BT
+        // =========================================================================
+        val autoCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+
+        val autoHeader = TextView(this).apply {
+            text = "🚗 SHOW THIS APP ON ANDROID AUTO CAR SCREEN"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+        }
+        autoCard.addView(autoHeader)
+
+        val autoNote = TextView(this).apply {
+            text = "Note: Even before adding the icon to your car dashboard, the 360° Live Sound & Sub Optimizer ALREADY filters all Spotify & YouTube Music audio playing over Android Auto!\n\nTo make the '360° Sound & Sub Guard' icon appear on your Pioneer DMH-Z5290BT screen (required by Google for APKs installed outside Play Store):\n1. Tap the button below to open Android Auto Settings.\n2. Scroll down and tap 'Version' 10 times to unlock Developer Mode.\n3. Tap the 3-dots menu (top right) -> 'Developer settings' -> Check 'Unknown sources'."
+            textSize = 12f
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setPadding(0, 8, 0, 16)
+        }
+        autoCard.addView(autoNote)
+
+        val autoSettingsBtn = Button(this).apply {
+            text = "🚗 Open Android Auto Settings (Enable Car Launcher Icon)"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#21262D", "#3FB950")
+            setTextColor(Color.parseColor("#3FB950"))
+            setOnClickListener { openAndroidAutoSettings() }
+        }
+        autoCard.addView(autoSettingsBtn)
+        root.addView(autoCard)
 
         scroll.addView(root)
         return scroll

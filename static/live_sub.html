@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Live Woofer Pass-Through Optimizer</title>
+  <title>360° Premium Sound & Live Subwoofer Optimizer</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -32,8 +32,8 @@
     .meter-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
     .stat-box { background: #090c10; border: 1px solid var(--border); border-radius: 10px; padding: 12px; text-align: center; }
     .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; }
-    .stat-val { font-size: 24px; font-weight: 800; color: var(--text-bright); margin-top: 4px; font-family: monospace; }
-    .bar-wrap { background: #21262d; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+    .stat-val { font-size: 20px; font-weight: 800; color: var(--text-bright); margin-top: 4px; font-family: monospace; }
+    .bar-wrap { background: #21262d; height: 10px; border-radius: 6px; overflow: hidden; margin-top: 8px; }
     .bar-fill { height: 100%; width: 0%; transition: width 0.06s linear; }
     .slider-row { margin-top: 12px; }
     .slider-header { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
@@ -48,55 +48,96 @@
   <div class="nav-bar">
     <a href="/" class="nav-link">🏠 Q930 Soundbar</a>
     <a href="/car" class="nav-link">🚗 Pioneer Car 4.1</a>
-    <a href="/live-sub" class="nav-link active">🎛️ Live Woofer Guard</a>
+    <a href="/live-sub" class="nav-link active">🎛️ 360° Sound Guard</a>
   </div>
 
-  <h2>Live Woofer Auto-Guard <span class="badge">REAL-TIME MIC LOOP</span></h2>
+  <h2>360° Premium Sound & Sub Guard <span class="badge">DEEP BASS • NO HIT</span></h2>
+
+  <div class="card">
+    <h3>📲 Install Native Android App v2.0 (Spotify + YouTube Music + Android Auto)</h3>
+    <div style="font-size: 12.5px; color: var(--text); line-height: 1.5; margin-bottom: 12px;">
+      <b>New in v2.0 Complete 360° Control App:</b>
+      <ul style="margin: 6px 0; padding-left: 18px; color: var(--muted);">
+        <li><b>Live Now Playing & Pass-Through Proof:</b> Shows live <b>Spotify / YouTube Music</b> song title, artist, active DSP frame counter, Play/Pause/Next controls, and a 1-tap <b>A/B Bypass Compare</b> button.</li>
+        <li><b>Deep Background Bass Without Hitting:</b> Separates <b>28–62 Hz Deep Velvet Sub</b> (+boosted warm background cushion) from <b>70–140 Hz Upper-Bass Hard-Hit Zone</b> (automatically suppressed up to -14 dB so bass never slams your chest/ears).</li>
+        <li><b>All-Speaker 360° Optimizer (Front + Rear + Sub):</b> Live 5-zone microphone analyzer + 1-tap <b>4-Second All-Speaker Auto-Calibration Sweep</b> + Distortion-Free THD Limiter.</li>
+        <li><b>Android Auto Car Dashboard Support:</b> Built with official <code>MediaBrowserServiceCompat</code> + 1-tap Android Auto Launcher Helper for Pioneer DMH-Z5290BT.</li>
+      </ul>
+    </div>
+    <a href="/download-apk" target="_blank" style="text-decoration:none;">
+      <button class="btn" style="background: var(--blue); color: #000; margin-bottom: 8px;">
+        ⬇️ Download LiveSubGuard.apk v2.0 (Direct Install)
+      </button>
+    </a>
+    <div style="font-size: 11px; color: var(--muted); text-align: center;">
+      Mirror link: <a href="https://github.com/surezramasamy/SOUNDBAR_OPTI/releases/latest/download/LiveSubGuard.apk" target="_blank" style="color: var(--blue);">GitHub Releases Latest APK</a>
+    </div>
+  </div>
 
   <div class="card">
     <div class="note-box">
-      <b>How This Works:</b> Your phone microphone continuously listens to the cabin/room bass (<b>30–90 Hz</b>) vs. vocals (<b>250–2000 Hz</b>). Whenever a loud, boomy bass note hits your ears, the pass-through DSP automatically ducks the <b>Subwoofer band (0 dB down to -12 dB)</b> in real time, leaving vocals and treble untouched.
+      <b>Browser 360° Live Mic Loop:</b> Enhances <b>Deep Background Sub (30–60 Hz)</b> while suppressing <b>Upper-Bass Hard Hits (75–140 Hz)</b> and balancing <b>Front/Rear Vocal Clarity (250–2800 Hz)</b>.
     </div>
 
     <div style="margin-top: 12px;">
-      <button id="toggleMicBtn" class="btn" onclick="toggleLiveOptimizer()">▶ Start Live Mic Woofer Optimizer</button>
+      <button id="toggleMicBtn" class="btn" onclick="toggleLiveOptimizer()">▶ Start 360° Live Mic Optimizer</button>
     </div>
 
     <div class="meter-grid">
       <div class="stat-box">
-        <div class="stat-label">Cabin Bass (30-90 Hz)</div>
+        <div class="stat-label">Deep Sub (30-60 Hz)</div>
+        <div class="stat-val" id="deepDbVal" style="color: var(--primary);">-- dB</div>
+        <div class="bar-wrap"><div id="deepBar" class="bar-fill" style="background: var(--primary);"></div></div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-label">Hard-Hit Zone (75-140 Hz)</div>
         <div class="stat-val" id="bassDbVal">-- dB</div>
         <div class="bar-wrap"><div id="bassBar" class="bar-fill" style="background: linear-gradient(90deg, #3fb950, #d29922, #f85149);"></div></div>
       </div>
 
       <div class="stat-box">
-        <div class="stat-label">Live Sub Reduction</div>
-        <div class="stat-val" id="cutDbVal" style="color: var(--primary);">0.0 dB</div>
+        <div class="stat-label">Anti-Hit Suppression</div>
+        <div class="stat-val" id="cutDbVal" style="color: var(--orange);">0.0 dB</div>
         <div class="bar-wrap"><div id="cutBar" class="bar-fill" style="background: var(--orange);"></div></div>
       </div>
+
+      <div class="stat-box">
+        <div class="stat-label">360° Front/Rear Vocals</div>
+        <div class="stat-val" id="midDbVal" style="color: var(--blue);">-- dB</div>
+        <div class="bar-wrap"><div id="midBar" class="bar-fill" style="background: var(--blue);"></div></div>
+      </div>
     </div>
 
     <div class="slider-row">
       <div class="slider-header">
-        <span><b>Bass Ceiling Threshold</b> (Lower = Cuts Boom Sooner)</span>
-        <span id="threshLabel" style="color:var(--primary); font-weight:700;">+4 dB over Mids</span>
+        <span><b>Deep Background Sub Warmth (30–60 Hz)</b></span>
+        <span id="deepLabel" style="color:var(--primary); font-weight:700;">+4.5 dB</span>
       </div>
-      <input type="range" id="threshSlider" min="-2" max="12" step="0.5" value="4" oninput="updateSliders()">
+      <input type="range" id="deepSlider" min="0" max="8" step="0.5" value="4.5" oninput="updateSliders()">
     </div>
 
     <div class="slider-row">
       <div class="slider-header">
-        <span><b>Max Subwoofer Cut Limit</b></span>
-        <span id="maxCutLabel" style="color:var(--orange); font-weight:700;">-10 dB</span>
+        <span><b>Anti-Hit Ceiling (75–140 Hz Slam Suppressor)</b></span>
+        <span id="threshLabel" style="color:var(--primary); font-weight:700;">+2.5 dB over Mids</span>
       </div>
-      <input type="range" id="maxCutSlider" min="3" max="15" step="1" value="10" oninput="updateSliders()">
+      <input type="range" id="threshSlider" min="-2" max="10" step="0.5" value="2.5" oninput="updateSliders()">
+    </div>
+
+    <div class="slider-row">
+      <div class="slider-header">
+        <span><b>Max Upper-Bass Hit Suppression</b></span>
+        <span id="maxCutLabel" style="color:var(--orange); font-weight:700;">-12 dB</span>
+      </div>
+      <input type="range" id="maxCutSlider" min="4" max="15" step="1" value="12" oninput="updateSliders()">
     </div>
   </div>
 
   <div class="card">
     <h3>Pass-Through Music Player (Direct Web DSP)</h3>
     <div style="font-size: 12px; color: var(--muted);">
-      Load songs from your phone below to route them directly through the real-time <b>30–90 Hz Subwoofer Auto-Ducker</b> before going to Bluetooth / Android Auto:
+      Load local audio files below to test the <b>Deep Velvet Sub + Anti-Hit Suppressor</b> directly in the browser:
     </div>
     <div class="file-box">
       <input type="file" id="audioFileInput" accept="audio/*" multiple onchange="loadAudioFiles(event)">
@@ -105,40 +146,32 @@
     </div>
   </div>
 
-  <div class="card">
-    <h3>📲 Install Android App for Spotify, YouTube Music & Android Auto</h3>
-    <div style="font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px;">
-      To automatically filter <b>Spotify, YouTube Music, and Android Auto</b> in the background while driving, install the native <b>LiveSubGuard.apk</b> app on your Android phone:
-    </div>
-    <a href="https://github.com/surezramasamy/SOUNDBAR_OPTI/releases/latest/download/LiveSubGuard.apk" target="_blank" style="text-decoration:none;">
-      <button class="btn" style="background: var(--blue); color: #000; margin-bottom: 8px;">
-        ⬇️ Download LiveSubGuard.apk (Android + Android Auto)
-      </button>
-    </a>
-    <div style="font-size: 11px; color: var(--muted); text-align: center;">
-      Or view build status on <a href="https://github.com/surezramasamy/SOUNDBAR_OPTI/actions" target="_blank" style="color: var(--blue);">GitHub Actions / Releases</a>
-    </div>
-  </div>
-
   <script>
     let isRunning = false;
     let audioCtx = null;
     let micStream = null;
     let micAnalyser = null;
-    let subShelfFilter = null;
-    let boomNotchFilter = null;
+    let deepVelvetFilter = null;
+    let antiHitNotchFilter = null;
+    let surroundClarityFilter = null;
     let mediaElementSource = null;
     let animTimer = null;
 
-    let currentCutDb = 0.0;
-    let targetOffsetDb = 4.0;
-    let maxCutDb = 10.0;
+    let currentCutDb = -3.0;
+    let deepWarmthDb = 4.5;
+    let targetOffsetDb = 2.5;
+    let maxCutDb = 12.0;
 
     function updateSliders() {
+      deepWarmthDb = parseFloat(document.getElementById('deepSlider').value);
       targetOffsetDb = parseFloat(document.getElementById('threshSlider').value);
       maxCutDb = parseFloat(document.getElementById('maxCutSlider').value);
+      document.getElementById('deepLabel').innerText = `+${deepWarmthDb.toFixed(1)} dB`;
       document.getElementById('threshLabel').innerText = `${targetOffsetDb >= 0 ? '+' : ''}${targetOffsetDb.toFixed(1)} dB over Mids`;
       document.getElementById('maxCutLabel').innerText = `-${maxCutDb.toFixed(0)} dB`;
+      if (deepVelvetFilter && audioCtx) {
+        deepVelvetFilter.gain.setTargetAtTime(deepWarmthDb, audioCtx.currentTime, 0.08);
+      }
     }
 
     function ensureAudioGraph() {
@@ -146,24 +179,32 @@
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         audioCtx = new AudioContextClass();
 
-        // 1. Low-shelf filter (< 90 Hz) that dynamically reduces subwoofer output
-        subShelfFilter = audioCtx.createBiquadFilter();
-        subShelfFilter.type = 'lowshelf';
-        subShelfFilter.frequency.value = 85;
-        subShelfFilter.gain.value = 0;
+        // 1. Deep Velvet Sub Foundation (45 Hz Low Shelf boost)
+        deepVelvetFilter = audioCtx.createBiquadFilter();
+        deepVelvetFilter.type = 'lowshelf';
+        deepVelvetFilter.frequency.value = 55;
+        deepVelvetFilter.gain.value = deepWarmthDb;
 
-        // 2. Peaking filter centered at 52 Hz (typical car cabin boom mode)
-        boomNotchFilter = audioCtx.createBiquadFilter();
-        boomNotchFilter.type = 'peaking';
-        boomNotchFilter.frequency.value = 52;
-        boomNotchFilter.Q.value = 2.2;
-        boomNotchFilter.gain.value = 0;
+        // 2. Anti-Hit Upper-Bass Suppressor (100 Hz Peaking Cut so bass never hits/slams)
+        antiHitNotchFilter = audioCtx.createBiquadFilter();
+        antiHitNotchFilter.type = 'peaking';
+        antiHitNotchFilter.frequency.value = 100;
+        antiHitNotchFilter.Q.value = 1.6;
+        antiHitNotchFilter.gain.value = -3.0;
+
+        // 3. 360° Front/Rear Vocal Clarity (1800 Hz Presence)
+        surroundClarityFilter = audioCtx.createBiquadFilter();
+        surroundClarityFilter.type = 'peaking';
+        surroundClarityFilter.frequency.value = 1800;
+        surroundClarityFilter.Q.value = 1.0;
+        surroundClarityFilter.gain.value = 2.5;
 
         const player = document.getElementById('audioPlayer');
         mediaElementSource = audioCtx.createMediaElementSource(player);
-        mediaElementSource.connect(boomNotchFilter);
-        boomNotchFilter.connect(subShelfFilter);
-        subShelfFilter.connect(audioCtx.destination);
+        mediaElementSource.connect(deepVelvetFilter);
+        deepVelvetFilter.connect(antiHitNotchFilter);
+        antiHitNotchFilter.connect(surroundClarityFilter);
+        surroundClarityFilter.connect(audioCtx.destination);
       }
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
@@ -175,7 +216,7 @@
       if (!files || files.length === 0) return;
       ensureAudioGraph();
       const file = files[0];
-      document.getElementById('trackName').innerText = `Playing through Sub Guard: ${file.name}`;
+      document.getElementById('trackName').innerText = `🟢 Playing through 360° Deep Velvet DSP: ${file.name}`;
       const player = document.getElementById('audioPlayer');
       player.src = URL.createObjectURL(file);
       player.play();
@@ -185,7 +226,7 @@
       const btn = document.getElementById('toggleMicBtn');
       if (isRunning) {
         stopLiveOptimizer();
-        btn.innerText = '▶ Start Live Mic Woofer Optimizer';
+        btn.innerText = '▶ Start 360° Live Mic Optimizer';
         btn.className = 'btn';
         return;
       }
@@ -203,11 +244,11 @@
         const micSource = audioCtx.createMediaStreamSource(micStream);
         micAnalyser = audioCtx.createAnalyser();
         micAnalyser.fftSize = 2048;
-        micAnalyser.smoothingTimeConstant = 0.65;
+        micAnalyser.smoothingTimeConstant = 0.6;
         micSource.connect(micAnalyser);
 
         isRunning = true;
-        btn.innerText = '⏹ Stop Live Mic Woofer Optimizer';
+        btn.innerText = '⏹ Stop 360° Live Mic Optimizer';
         btn.className = 'btn btn-stop';
 
         animTimer = setInterval(processLiveMicFrame, 80);
@@ -223,13 +264,6 @@
         micStream.getTracks().forEach(t => t.stop());
         micStream = null;
       }
-      if (subShelfFilter && boomNotchFilter) {
-        subShelfFilter.gain.value = 0;
-        boomNotchFilter.gain.value = 0;
-      }
-      currentCutDb = 0.0;
-      document.getElementById('cutDbVal').innerText = '0.0 dB';
-      document.getElementById('cutBar').style.width = '0%';
     }
 
     function processLiveMicFrame() {
@@ -241,55 +275,59 @@
       const nyquist = audioCtx.sampleRate / 2.0;
       const binHz = nyquist / freqBins.length;
 
-      // Measure Sub-Bass (30 - 95 Hz) and Midrange (250 - 2000 Hz)
-      let subSum = 0, subCount = 0;
+      let deepSum = 0, deepCount = 0;
+      let hitSum = 0, hitCount = 0;
       let midSum = 0, midCount = 0;
 
       for (let i = 1; i < freqBins.length; i++) {
         const f = i * binHz;
         const p = Math.pow(10, freqBins[i] / 20.0);
-        if (f >= 30 && f <= 95) {
-          subSum += p * p;
-          subCount++;
-        } else if (f >= 250 && f <= 2000) {
+        if (f >= 28 && f <= 62) {
+          deepSum += p * p;
+          deepCount++;
+        } else if (f >= 70 && f <= 145) {
+          hitSum += p * p;
+          hitCount++;
+        } else if (f >= 250 && f <= 2500) {
           midSum += p * p;
           midCount++;
         }
       }
 
-      const subRms = Math.sqrt(subSum / Math.max(subCount, 1)) + 1e-9;
-      const midRms = Math.sqrt(midSum / Math.max(midCount, 1)) + 1e-9;
+      const deepDb = 20 * Math.log10(Math.sqrt(deepSum / Math.max(deepCount, 1)) + 1e-9) + 100;
+      const hitDb = 20 * Math.log10(Math.sqrt(hitSum / Math.max(hitCount, 1)) + 1e-9) + 100;
+      const midDb = 20 * Math.log10(Math.sqrt(midSum / Math.max(midCount, 1)) + 1e-9) + 100;
 
-      const subDb = 20 * Math.log10(subRms) + 100;
-      const midDb = 20 * Math.log10(midRms) + 100;
+      const hitExcess = (hitDb - midDb) - targetOffsetDb;
+      const baseCut = -Math.min(3.5, maxCutDb * 0.35);
 
-      // Check how much bass exceeds (Midrange + User Threshold) OR absolute loud bass ceiling
-      const bassExcess = (subDb - midDb) - targetOffsetDb;
-
-      if (subDb > 48 && bassExcess > 0) {
-        // Fast attack when boomy bass hits
-        const desiredCut = -Math.min(maxCutDb, bassExcess * 0.85);
-        currentCutDb = currentCutDb * 0.65 + desiredCut * 0.35;
+      if (hitExcess > 0) {
+        const desiredCut = -Math.min(maxCutDb, Math.abs(baseCut) + hitExcess * 0.95);
+        currentCutDb = currentCutDb * 0.55 + desiredCut * 0.45;
       } else {
-        // Smooth release back toward 0 dB when bass is clean
-        currentCutDb = currentCutDb * 0.90;
-        if (Math.abs(currentCutDb) < 0.1) currentCutDb = 0.0;
+        currentCutDb = currentCutDb * 0.8 + baseCut * 0.2;
       }
 
-      // Apply live filter cut to pass-through audio stream
-      if (subShelfFilter && boomNotchFilter && audioCtx) {
-        subShelfFilter.gain.setTargetAtTime(currentCutDb * 0.7, audioCtx.currentTime, 0.05);
-        boomNotchFilter.gain.setTargetAtTime(currentCutDb * 0.5, audioCtx.currentTime, 0.05);
+      if (antiHitNotchFilter && deepVelvetFilter && audioCtx) {
+        antiHitNotchFilter.gain.setTargetAtTime(currentCutDb, audioCtx.currentTime, 0.04);
+        deepVelvetFilter.gain.setTargetAtTime(deepWarmthDb, audioCtx.currentTime, 0.08);
       }
 
-      // Update UI meters
-      const clampedSubDb = Math.max(35, Math.min(95, subDb));
-      document.getElementById('bassDbVal').innerText = `${clampedSubDb.toFixed(1)} dB`;
-      document.getElementById('bassBar').style.width = `${((clampedSubDb - 35) / 60) * 100}%`;
+      const cDeep = Math.max(35, Math.min(95, deepDb));
+      const cHit = Math.max(35, Math.min(95, hitDb));
+      const cMid = Math.max(35, Math.min(95, midDb));
+
+      document.getElementById('deepDbVal').innerText = `${cDeep.toFixed(1)} dB (+${deepWarmthDb.toFixed(1)})`;
+      document.getElementById('deepBar').style.width = `${((cDeep - 35) / 60) * 100}%`;
+
+      document.getElementById('bassDbVal').innerText = `${cHit.toFixed(1)} dB`;
+      document.getElementById('bassBar').style.width = `${((cHit - 35) / 60) * 100}%`;
 
       document.getElementById('cutDbVal').innerText = `${currentCutDb.toFixed(1)} dB`;
-      document.getElementById('cutDbVal').style.color = currentCutDb < -1.5 ? '#ff7b00' : '#3fb950';
       document.getElementById('cutBar').style.width = `${(Math.abs(currentCutDb) / maxCutDb) * 100}%`;
+
+      document.getElementById('midDbVal').innerText = `${cMid.toFixed(1)} dB (+2.5)`;
+      document.getElementById('midBar').style.width = `${((cMid - 35) / 60) * 100}%`;
     }
   </script>
 </body>

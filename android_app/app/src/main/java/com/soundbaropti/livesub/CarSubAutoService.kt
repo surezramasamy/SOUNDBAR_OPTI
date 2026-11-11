@@ -1,78 +1,247 @@
 package com.soundbaropti.livesub
 
 import android.content.Intent
-import android.media.MediaDescription
-import android.media.browse.MediaBrowser.MediaItem
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
+import android.os.Build
 import android.os.Bundle
-import android.service.media.MediaBrowserService
+import android.support.v4.media.MediaBrowserCompat
+import android.support.v4.media.MediaDescriptionCompat
+import android.support.v4.media.MediaMetadataCompat
+import android.support.v4.media.session.MediaSessionCompat
+import android.support.v4.media.session.PlaybackStateCompat
+import androidx.media.MediaBrowserServiceCompat
 
 /**
- * Android Auto Dashboard Integration for Pioneer DMH-Z5290BT.
- * Lets the driver toggle Live Woofer Guard and switch bass thresholds directly on the car screen.
+ * Android Auto Dashboard Integration for Pioneer DMH-Z5290BT (using official MediaBrowserServiceCompat).
+ * Displays live 360° pass-through status, song details, and 1-tap sound profiles on the car screen.
  */
-class CarSubAutoService : MediaBrowserService() {
+class CarSubAutoService : MediaBrowserServiceCompat() {
 
-    private lateinit var mediaSession: MediaSession
+    private lateinit var mediaSession: MediaSessionCompat
 
     override fun onCreate() {
         super.onCreate()
-        mediaSession = MediaSession(this, "CarSubAutoSession").apply {
-            setCallback(object : MediaSession.Callback() {
+        mediaSession = MediaSessionCompat(this, "CarSubAutoSessionCompat").apply {
+            setFlags(
+                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
+                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
+            )
+            setCallback(object : MediaSessionCompat.Callback() {
+                override fun onPlay() {
+                    startGuardService()
+                    updateCarNowPlayingState()
+                }
+
+                override fun onPause() {
+                    NowPlayingListenerService.playPause(this@CarSubAutoService)
+                    updateCarNowPlayingState()
+                }
+
+                override fun onSkipToNext() {
+                    NowPlayingListenerService.nextTrack(this@CarSubAutoService)
+                    updateCarNowPlayingState()
+                }
+
+                override fun onSkipToPrevious() {
+                    NowPlayingListenerService.prevTrack(this@CarSubAutoService)
+                    updateCarNowPlayingState()
+                }
+
                 override fun onPlayFromMediaId(mediaId: String?, extras: Bundle?) {
                     when (mediaId) {
                         "toggle_guard" -> {
                             val svc = Intent(this@CarSubAutoService, LiveSubPassThroughService::class.java)
-                            svc.action = if (LiveSubPassThroughService.isRunning)
-                                LiveSubPassThroughService.ACTION_STOP
-                            else
-                                LiveSubPassThroughService.ACTION_START
-                            startService(svc)
+                            if (LiveSubPassThroughService.isRunning) {
+                                svc.action = LiveSubPassThroughService.ACTION_STOP
+                                startService(svc)
+                            } else {
+                                startGuardService()
+                            }
                         }
-                        "preset_tight" -> LiveSubPassThroughService.targetBassOverMidsDb = 2.0f
-                        "preset_balanced" -> LiveSubPassThroughService.targetBassOverMidsDb = 4.0f
-                        "preset_deep" -> LiveSubPassThroughService.targetBassOverMidsDb = 7.0f
+                        "toggle_bypass" -> {
+                            LiveSubPassThroughService.isBypassed = !LiveSubPassThroughService.isBypassed
+                        }
+                        "preset_velvet" -> {
+                            startGuardService()
+                            LiveSubPassThroughService.applyPreset("DEEP_VELVET")
+                        }
+                        "preset_surround" -> {
+                            startGuardService()
+                            LiveSubPassThroughService.applyPreset("SURROUND_360")
+                        }
+                        "preset_vocal" -> {
+                            startGuardService()
+                            LiveSubPassThroughService.applyPreset("PURE_VOCAL")
+                        }
+                        "preset_loudness" -> {
+                            startGuardService()
+                            LiveSubPassThroughService.applyPreset("LOUDNESS_RICH")
+                        }
+                        "run_auto_cal" -> {
+                            val svc = Intent(this@CarSubAutoService, LiveSubPassThroughService::class.java).apply {
+                                action = LiveSubPassThroughService.ACTION_RUN_SWEEP
+                            }
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(svc)
+                            } else {
+                                startService(svc)
+                            }
+                        }
                     }
+                    updateCarNowPlayingState()
                     notifyChildrenChanged("root")
                 }
+
+                override fun onCustomAction(action: String?, extras: Bundle?) {
+                    onPlayFromMediaId(action, extras)
+                }
             })
-            val state = PlaybackState.Builder()
-                .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PLAY_FROM_MEDIA_ID)
-                .setState(PlaybackState.STATE_PAUSED, 0, 1.0f)
-                .build()
-            setPlaybackState(state)
             isActive = true
         }
         sessionToken = mediaSession.sessionToken
+        updateCarNowPlayingState()
     }
 
-    override fun onGetRoot(clientPackageName: String, clientUid: Int, rootHints: Bundle?): BrowserRoot {
-        return BrowserRoot("root", null)
+    private fun startGuardService() {
+        val svc = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_START
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(svc)
+        } else {
+            startService(svc)
+        }
     }
 
-    override fun onLoadChildren(parentId: String, result: Result<MutableList<MediaItem>>) {
-        val items = mutableListOf<MediaItem>()
-        val statusText = if (LiveSubPassThroughService.isRunning)
-            "Active (Cut: %.1f dB) — Tap to Stop".format(LiveSubPassThroughService.liveCutDb)
-        else
-            "Stopped — Tap to Start Live Mic Guard"
+    private fun updateCarNowPlayingState() {
+        val running = LiveSubPassThroughService.isRunning
+        val stateCode = if (running) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
 
-        items.add(buildItem("toggle_guard", "Live Woofer Auto-Guard", statusText))
-        items.add(buildItem("preset_tight", "Preset: Tight Anti-Boom (+2 dB Ceiling)", "Cuts cabin boom aggressively"))
-        items.add(buildItem("preset_balanced", "Preset: Balanced (+4 dB Ceiling)", "Recommended for daily driving"))
-        items.add(buildItem("preset_deep", "Preset: Deep Punch (+7 dB Ceiling)", "Allows louder bass before ducking"))
+        val stateBuilder = PlaybackStateCompat.Builder()
+            .setActions(
+                PlaybackStateCompat.ACTION_PLAY or
+                PlaybackStateCompat.ACTION_PAUSE or
+                PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
+                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
+                PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
+            )
+            .setState(stateCode, 0L, 1.0f)
+
+        mediaSession.setPlaybackState(stateBuilder.build())
+
+        val songTitle = NowPlayingListenerService.currentTitle
+        val dspSummary = if (!running) {
+            "DSP Stopped — Tap to Start 360° Optimizer"
+        } else if (LiveSubPassThroughService.isBypassed) {
+            "A/B BYPASS MODE (Raw Unprocessed Audio)"
+        } else {
+            "Deep Sub %+.1f dB | Anti-Hit %.1f dB | 360° %+.1f dB".format(
+                LiveSubPassThroughService.liveDeepGainDb,
+                LiveSubPassThroughService.liveCutDb,
+                LiveSubPassThroughService.liveMidGainDb
+            )
+        }
+
+        val meta = MediaMetadataCompat.Builder()
+            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "$songTitle (${NowPlayingListenerService.currentAppName})")
+            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, dspSummary)
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Pioneer DMH-Z5290BT 360° Live Optimizer")
+            .build()
+        mediaSession.setMetadata(meta)
+    }
+
+    override fun onGetRoot(
+        clientPackageName: String,
+        clientUid: Int,
+        rootHints: Bundle?
+    ): BrowserRoot {
+        val extras = Bundle().apply {
+            putBoolean("android.media.browse.CONTENT_STYLE_SUPPORTED", true)
+            putInt("android.media.browse.CONTENT_STYLE_BROWSABLE_HINT", 1)
+            putInt("android.media.browse.CONTENT_STYLE_PLAYABLE_HINT", 1)
+        }
+        return BrowserRoot("root", extras)
+    }
+
+    override fun onLoadChildren(
+        parentId: String,
+        result: Result<MutableList<MediaBrowserCompat.MediaItem>>
+    ) {
+        updateCarNowPlayingState()
+        val items = mutableListOf<MediaBrowserCompat.MediaItem>()
+
+        val statusSubtitle = if (LiveSubPassThroughService.isRunning) {
+            "ACTIVE • Deep Sub %+.1f dB • Anti-Hit %.1f dB (Tap to Stop)".format(
+                LiveSubPassThroughService.liveDeepGainDb,
+                LiveSubPassThroughService.liveCutDb
+            )
+        } else {
+            "STOPPED • Tap to Start 360° Live Mic Optimizer"
+        }
+
+        val nowPlayingSub = "${NowPlayingListenerService.currentTitle} — ${NowPlayingListenerService.currentArtist}"
+
+        items.add(
+            buildItem(
+                "toggle_guard",
+                "🟢 360° Live Sound & Sub Optimizer",
+                "$statusSubtitle | Playing: $nowPlayingSub"
+            )
+        )
+        items.add(
+            buildItem(
+                "preset_velvet",
+                "✨ Preset: Deep Velvet Bass (No Hard Hit)",
+                "Warm 30-58 Hz background cushion + aggressive 80-135 Hz slam suppression"
+            )
+        )
+        items.add(
+            buildItem(
+                "preset_surround",
+                "🎭 Preset: 360° Surround Concert Hall",
+                "Balanced Front Component + Rear Coaxial immersion & wide vocals"
+            )
+        )
+        items.add(
+            buildItem(
+                "preset_vocal",
+                "💎 Preset: Pure Vocal & Silk Tweeter",
+                "Crystal midrange clarity + zero tweeter harshness + tight sub"
+            )
+        )
+        items.add(
+            buildItem(
+                "preset_loudness",
+                "🔥 Preset: Low-Volume Rich Loudness",
+                "Full deep bass & crisp detail even at low cabin volume"
+            )
+        )
+        items.add(
+            buildItem(
+                "toggle_bypass",
+                if (LiveSubPassThroughService.isBypassed) "🔊 A/B Mode: RAW BYPASS (Tap for 360° DSP)" else "🔊 A/B Mode: 360° DSP ON (Tap to Compare Raw)",
+                "Instant live A/B comparison while Spotify / YouTube Music plays"
+            )
+        )
+        items.add(
+            buildItem(
+                "run_auto_cal",
+                "🎯 Auto-Calibrate Front + Rear + Subwoofer",
+                "Plays 4-sec harmonic sweep & auto-levels all cabin speakers via phone mic"
+            )
+        )
 
         result.sendResult(items)
     }
 
-    private fun buildItem(id: String, title: String, subtitle: String): MediaItem {
-        val desc = MediaDescription.Builder()
+    private fun buildItem(id: String, title: String, subtitle: String): MediaBrowserCompat.MediaItem {
+        val desc = MediaDescriptionCompat.Builder()
             .setMediaId(id)
             .setTitle(title)
             .setSubtitle(subtitle)
             .build()
-        return MediaItem(desc, MediaItem.FLAG_PLAYABLE)
+        return MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
     }
 
     override fun onDestroy() {
