@@ -83,6 +83,14 @@ def get_car_page():
     return {"message": "Pioneer DMH-Z5290BT Car Calibration Page."}
 
 
+@app.get("/live-sub")
+def get_live_sub_page():
+    live_file = os.path.join(static_dir, "live_sub.html")
+    if os.path.exists(live_file):
+        return FileResponse(live_file)
+    return {"message": "Live Woofer Auto-Guard Page."}
+
+
 # ==============================================================================
 # 1. SAMSUNG HW-Q930 9.1.4 SOUNDBAR ENDPOINTS
 # ==============================================================================
