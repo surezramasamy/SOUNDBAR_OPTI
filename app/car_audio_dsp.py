@@ -244,8 +244,8 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
     rms_c = float(np.sqrt(np.mean(c_weighted ** 2)) + 1e-12)
     db_spl = 20.0 * np.log10(rms_c) + 94.0
 
-    # FFT analysis across the sustained harmonic chord (last 45% of recording)
-    chord_slice = band_audio[int(len(band_audio) * 0.45):]
+    # FFT analysis across the sustained harmonic chord (last 38% of trimmed recording where all 9 harmonics have equal energy)
+    chord_slice = band_audio[int(len(band_audio) * 0.62):]
     n_fft = min(len(chord_slice), 8192)
     band_energies_db = {}
     harm_dict = {}
