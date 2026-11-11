@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pioneer DMH-Z5290BT Car Audio (4.1) Calibrator</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --primary: #ff7b00;
+      --blue: #58a6ff;
+      --success: #2ea043;
+      --danger: #f85149;
+      --warning: #d29922;
+      --text: #c9d1d9;
+      --text-bright: #ffffff;
+      --muted: #8b949e;
+    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; max-width: 720px; margin-left: auto; margin-right: auto; }
+    h2, h3 { color: var(--text-bright); margin: 4px 0 8px 0; }
+    .nav-bar { display: flex; gap: 8px; margin-bottom: 14px; background: #161b22; padding: 6px; border-radius: 10px; border: 1px solid var(--border); }
+    .nav-link { flex: 1; text-align: center; text-decoration: none; padding: 9px 10px; border-radius: 7px; font-size: 13px; font-weight: 700; color: var(--muted); transition: 0.15s; }
+    .nav-link.active { background: var(--primary); color: #000; }
+    .nav-link:not(.active):hover { color: #fff; background: #21262d; }
+    .badge { background: var(--primary); color: #000; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-size: 11px; vertical-align: middle; }
+    .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 14px; border: 1px solid var(--border); }
+    .checklist { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0; padding-left: 18px; }
+    .btn { background: var(--primary); color: #000; font-weight: 700; border: none; border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; transition: opacity 0.15s; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-sm { padding: 7px 11px; font-size: 12px; border-radius: 6px; }
+    .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+    .btn-confirm { background: var(--success); color: #fff; }
+    .btn-reset { background: #21262d; color: var(--muted); border: 1px solid var(--border); }
+    .top-actions { display: flex; gap: 10px; margin-top: 12px; }
+    .meter-wrap { background: #090c10; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 10px; }
+    .meter-bar-bg { background: #21262d; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 6px; }
+    .meter-bar { background: linear-gradient(90deg, #2ea043, #ff7b00, #f85149); height: 100%; width: 0%; transition: width 0.08s; }
+    .ch-card { background: #0d1117; border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .ch-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .ch-title { font-weight: 700; color: var(--text-bright); font-size: 15px; }
+    .ch-menu { font-size: 12px; color: var(--primary); font-family: monospace; margin-top: 2px; }
+    .ch-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .ch-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; justify-content: space-between; border-top: 1px solid #21262d; padding-top: 10px; }
+    .pill { display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-top: 4px; }
+    .pill-req { background: #1f2937; border: 1px solid var(--warning); color: #ffd33d; }
+    .pill-xover { background: rgba(88, 166, 255, 0.14); border: 1px solid var(--blue); color: var(--blue); }
+    .pill-ok { background: rgba(46, 160, 67, 0.15); border: 1px solid var(--success); color: #3fb950; }
+    .pill-harsh { background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger); color: #ff7b72; font-size: 12px; }
+    .confirm-box { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; background: #161b22; border-left: 3px solid var(--success); }
+    .confirm-box.warn { border-left-color: var(--warning); }
+    .xover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .xover-item { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+    .xover-label { color: var(--muted); font-size: 11px; }
+    .xover-val { color: var(--text-bright); font-weight: 700; margin-top: 2px; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+  <div class="nav-bar">
+    <a href="/" class="nav-link">🏠 Samsung Q930 (9.1.4 Soundbar)</a>
+    <a href="/car" class="nav-link active">🚗 Pioneer DMH-Z5290BT (Car 4.1)</a>
+  </div>
+
+  <h2>Pioneer DMH-Z5290BT Calibrator <span class="badge">4 SPEAKERS + 1 SUB</span></h2>
+
+  <div class="card">
+    <h3>Step 1: Pioneer DMH-Z5290BT Pre-Test Setup</h3>
+    <ol class="checklist">
+      <li>Connect your phone to the <b>Pioneer DMH-Z5290BT</b> via <b>Bluetooth</b> or <b>Android Auto / CarPlay</b>.</li>
+      <li>On the Pioneer touchscreen, go to <b>Settings ⚙️ $\to$ Audio $\to$ Speaker Level</b> and set all 5 channels (FL, FR, RL, RR, Sub) to <b>0 dB</b>.</li>
+      <li>Turn <b>Loudness OFF</b>, <b>Bass Boost = 0</b>, and set Master Volume to <b>24–28</b> (clean listening volume).</li>
+      <li>Sit in the driver's seat, hold the phone at <b>ear height (driver's headrest)</b>, and tap <b>Test All Car Channels</b>.</li>
+    </ol>
+
+    <div class="meter-wrap">
+      <div style="display:flex; justify-content:space-between; font-size:12px;">
+        <span id="statusLabel">Status: Idle — Ready to test car speakers</span>
+        <span id="liveMicLabel">Mic Level: --</span>
+      </div>
+      <div class="meter-bar-bg">
+        <div id="liveMicBar" class="meter-bar"></div>
+      </div>
+    </div>
+
+    <div class="top-actions">
+      <button id="runAllBtn" class="btn" style="flex:2;" onclick="runFullSweep()">▶ Test All Car Channels</button>
+      <button id="resetBtn" class="btn btn-reset" style="flex:1;" onclick="resetAll()">Reset</button>
+    </div>
+  </div>
+
+  <div id="xoverSummaryCard" class="card" style="display:none;">
+    <h3>Recommended Pioneer DMH-Z5290BT Crossover Summary</h3>
+    <div style="font-size:12px; color:var(--muted);">Set these inside <b>Settings ⚙️ $\to$ Audio $\to$ Crossover (HPF / Subwoofer)</b>:</div>
+    <div class="xover-grid">
+      <div class="xover-item">
+        <div class="xover-label">Front Door Speakers (HPF)</div>
+        <div class="xover-val" id="sumFrontHpf">--</div>
+      </div>
+      <div class="xover-item">
+        <div class="xover-label">Rear Door Speakers (HPF)</div>
+        <div class="xover-val" id="sumRearHpf">--</div>
+      </div>
+      <div class="xover-item">
+        <div class="xover-label">Subwoofer Cutoff (LPF)</div>
+        <div class="xover-val" id="sumSubLpf">--</div>
+      </div>
+      <div class="xover-item">
+        <div class="xover-label">Subwoofer Phase & Blend</div>
+        <div class="xover-val" id="sumSubPhase">--</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="channelContainer"></div>
+
+  <script>
+    let channels = [];
+    let calSummary = { reference_db: null, channels: {}, master_crossover_guide: null };
+    let isBusy = false;
+
+    async function initApp() {
+      const res = await fetch('/api/car/channels');
+      const data = await res.json();
+      channels = data.channels;
+      const calRes = await fetch('/api/car/calculate-calibration');
+      calSummary = await calRes.json();
+      renderChannels();
+    }
+
+    function renderChannels() {
+      const xCard = document.getElementById('xoverSummaryCard');
+      if (calSummary.master_crossover_guide) {
+        xCard.style.display = 'block';
+        const g = calSummary.master_crossover_guide;
+        document.getElementById('sumFrontHpf').innerText = g.front_hpf;
+        document.getElementById('sumRearHpf').innerText = g.rear_hpf;
+        document.getElementById('sumSubLpf').innerText = g.sub_lpf;
+        document.getElementById('sumSubPhase').innerText = g.sub_phase;
+      } else {
+        xCard.style.display = 'none';
+      }
+
+      const container = document.getElementById('channelContainer');
+      container.innerHTML = '';
+
+      channels.forEach(ch => {
+        const res = (calSummary.channels || {})[ch.id];
+        let metricsHtml = '';
+
+        if (res) {
+          const isBlend = ch.id === 'crossover_blend';
+          const reqClass = (res.required_pioneer_db === 0 && !res.is_harsh) ? 'pill-ok' : 'pill-req';
+          const diagBadge = res.is_harsh
+            ? `<span class="pill pill-harsh">⚠️ ${res.diagnosis}</span>`
+            : `<span style="font-size:12px; color:#3fb950;">✓ ${res.diagnosis}</span>`;
+
+          let confirmHtml = '';
+          if (res.confirmation) {
+            const c = res.confirmation;
+            const boxClass = c.is_confirmed ? 'confirm-box' : 'confirm-box warn';
+            const icon = c.is_confirmed ? '✅ CONFIRMED:' : '🔧 FINE-TUNE:';
+            confirmHtml = `
+              <div class="${boxClass}">
+                <b>${icon}</b> Re-tested at <b>${c.post_db} dB</b>. ${c.fine_tune_suggestion}
+              </div>
+            `;
+          }
+
+          metricsHtml = `
+            <div class="ch-metrics">
+              <div style="flex:1;">
+                <div style="font-size:12px; color:var(--muted);">
+                  Measured at Driver Ear: <b>${res.initial_measured_db} dB</b> | Target: <b>${res.target_db} dB</b>
+                </div>
+                <div style="margin-top:4px;">${diagBadge}</div>
+              </div>
+              <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
+                ${!isBlend ? `<span class="pill ${reqClass}">Set Speaker Level: ${res.required_action_text}</span>` : ''}
+                <span class="pill pill-xover">Set ${res.xover_recommendation}</span>
+              </div>
+            </div>
+            ${confirmHtml}
+          `;
+        }
+
+        container.innerHTML += `
+          <div class="ch-card" id="card-${ch.id}">
+            <div class="ch-header">
+              <div>
+                <div class="ch-title">${ch.name}</div>
+                <div class="ch-menu">Level Menu: ${ch.pioneer_menu}</div>
+                <div class="ch-menu" style="color:var(--blue);">Crossover Menu: ${ch.xover_menu}</div>
+                <div class="ch-desc">${ch.desc}</div>
+              </div>
+              <div style="display:flex; gap:6px; flex-shrink:0;">
+                <button class="btn btn-sm btn-outline" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'initial')">
+                  ${res ? 'Re-Measure' : 'Test (at 0 dB)'}
+                </button>
+                ${res ? `
+                  <button class="btn btn-sm btn-confirm" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'confirm')">
+                    Confirm dB
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+            ${metricsHtml}
+          </div>
+        `;
+      });
+    }
+
+    function encodeWAV(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
+      const writeString = (offset, str) => {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      };
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, samples.length * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < samples.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      }
+      return new Blob([view], { type: 'audio/wav' });
+    }
+
+    async function captureAndPlayChannel(ch, mode) {
+      const statusEl = document.getElementById('statusLabel');
+      const micLabel = document.getElementById('liveMicLabel');
+      const micBar = document.getElementById('liveMicBar');
+
+      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Ding-Dong Chime'}: ${ch.name}...`;
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false
+        }
+      });
+
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      const source = audioCtx.createMediaStreamSource(stream);
+      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
+      const recordedChunks = [];
+
+      processor.onaudioprocess = (e) => {
+        const input = e.inputBuffer.getChannelData(0);
+        recordedChunks.push(new Float32Array(input));
+        let sum = 0;
+        for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+        const rms = Math.sqrt(sum / input.length);
+        const db = Math.max(0, Math.min(100, (20 * Math.log10(rms + 1e-6) + 80) * 1.4));
+        micBar.style.width = `${db.toFixed(0)}%`;
+        micLabel.innerText = `Mic: ${(db * 0.6 + 40).toFixed(1)} dB`;
+      };
+
+      source.connect(processor);
+      processor.connect(audioCtx.destination);
+
+      const player = new Audio(`/api/car/tone/${ch.id}?duration=3.2&v=${Date.now()}`);
+      await player.play();
+
+      await new Promise(resolve => {
+        player.onended = () => setTimeout(resolve, 250);
+      });
+
+      processor.disconnect();
+      source.disconnect();
+      stream.getTracks().forEach(t => t.stop());
+      const sampleRate = audioCtx.sampleRate;
+      await audioCtx.close();
+
+      let totalLen = recordedChunks.reduce((acc, cur) => acc + cur.length, 0);
+      let merged = new Float32Array(totalLen);
+      let offset = 0;
+      for (let chunk of recordedChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      const wavBlob = encodeWAV(merged, sampleRate);
+      statusEl.innerText = `Analyzing ${ch.name}...`;
+
+      const formData = new FormData();
+      formData.append('channel_id', ch.id);
+      formData.append('mode', mode);
+      formData.append('audio_file', wavBlob, `${ch.id}.wav`);
+
+      const resp = await fetch('/api/car/analyze-channel', { method: 'POST', body: formData });
+      const result = await resp.json();
+      calSummary = result.summary;
+
+      micBar.style.width = '0%';
+      statusEl.innerText = `Completed: ${ch.name}`;
+    }
+
+    async function testSingleChannel(channelId, mode) {
+      if (isBusy) return;
+      isBusy = true;
+      document.getElementById('runAllBtn').disabled = true;
+      renderChannels();
+
+      try {
+        const ch = channels.find(c => c.id === channelId);
+        await captureAndPlayChannel(ch, mode);
+      } catch (err) {
+        alert('Microphone or audio error: ' + err.message);
+      } finally {
+        isBusy = false;
+        document.getElementById('runAllBtn').disabled = false;
+        renderChannels();
+      }
+    }
+
+    async function runFullSweep() {
+      if (isBusy) return;
+      isBusy = true;
+      document.getElementById('runAllBtn').disabled = true;
+      renderChannels();
+
+      try {
+        for (let i = 0; i < channels.length; i++) {
+          await captureAndPlayChannel(channels[i], 'initial');
+          renderChannels();
+          await new Promise(r => setTimeout(r, 400));
+        }
+        document.getElementById('statusLabel').innerText = 'All Car Channels Tested! Set Pioneer dB & Crossovers, then tap Confirm.';
+      } catch (err) {
+        alert('Calibration interrupted: ' + err.message);
+      } finally {
+        isBusy = false;
+        document.getElementById('runAllBtn').disabled = false;
+        renderChannels();
+      }
+    }
+
+    async function resetAll() {
+      if (isBusy) return;
+      await fetch('/api/car/reset', { method: 'POST' });
+      const calRes = await fetch('/api/car/calculate-calibration');
+      calSummary = await calRes.json();
+      document.getElementById('statusLabel').innerText = 'Status: Reset — Ready to test';
+      renderChannels();
+    }
+
+    initApp();
+  </script>
+</body>
+</html>
