@@ -257,9 +257,9 @@ def analyze_car_channel_audio(wav_bytes: bytes, channel_id: str) -> dict:
 
         harm_amps = []
         for hf in harmonics:
-            mask = (freqs >= hf * 0.92) & (freqs <= hf * 1.08)
+            mask = (freqs >= hf * 0.90) & (freqs <= hf * 1.10)
             if np.any(mask):
-                amp = float(np.max(spec[mask])) + 1e-12
+                amp = float(np.sqrt(np.sum(spec[mask] ** 2))) + 1e-12
                 harm_amps.append((hf, amp))
                 harm_dict[hf] = amp
                 band_energies_db[str(int(round(hf)))] = round(float(20.0 * np.log10(amp)), 1)
