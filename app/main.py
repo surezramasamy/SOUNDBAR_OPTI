@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, FileResponse
+from fastapi.responses import Response, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import os
 import sys
@@ -89,6 +89,20 @@ def get_live_sub_page():
     if os.path.exists(live_file):
         return FileResponse(live_file)
     return {"message": "Live Woofer Auto-Guard Page."}
+
+
+@app.get("/download-apk")
+def download_apk():
+    apk_file = os.path.join(static_dir, "LiveSubGuard.apk")
+    if os.path.exists(apk_file):
+        return FileResponse(
+            apk_file,
+            media_type="application/vnd.android.package-archive",
+            filename="LiveSubGuard.apk",
+        )
+    return RedirectResponse(
+        url="https://github.com/surezramasamy/SOUNDBAR_OPTI/releases/latest/download/LiveSubGuard.apk"
+    )
 
 
 # ==============================================================================

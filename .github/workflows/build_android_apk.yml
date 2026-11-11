@@ -22,8 +22,9 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
@@ -32,10 +33,12 @@ jobs:
 
       - name: Build Debug APK (Installable on Phone)
         working-directory: ./android_app
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: Copy APK to LiveSubGuard.apk
-        run: cp android_app/app/build/outputs/apk/debug/app-debug.apk LiveSubGuard.apk
+      - name: Copy APK to LiveSubGuard.apk and static/
+        run: |
+          cp android_app/app/build/outputs/apk/debug/app-debug.apk LiveSubGuard.apk
+          cp android_app/app/build/outputs/apk/debug/app-debug.apk static/LiveSubGuard.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -53,3 +56,10 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit built APK into static/LiveSubGuard.apk for direct web download
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f static/LiveSubGuard.apk
+          git diff --staged --quiet || (git commit -m "chore: bundle built LiveSubGuard.apk in static/ [skip ci]" && git push origin HEAD:main)
