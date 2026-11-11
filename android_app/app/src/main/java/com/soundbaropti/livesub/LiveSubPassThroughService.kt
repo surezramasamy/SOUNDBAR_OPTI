@@ -45,6 +45,7 @@ class LiveSubPassThroughService : Service() {
         @Volatile var isRunning = false
         @Volatile var isBypassed = false
         @Volatile var isCalibrating = false
+        @Volatile var calibrationProgress = 0
         @Volatile var calibrationStatus = "Ready — Tap to auto-measure Front, Rear & Subwoofer"
 
         // User-controllable 360° Premium Sound Tuning Targets
@@ -598,23 +599,29 @@ class LiveSubPassThroughService : Service() {
         isCalibrating = true
         thread(start = true, name = "SpeakerAutoCalThread") {
             try {
-                calibrationStatus = "Step 1/4: Measuring Deep Subwoofer (42 Hz Velvet Foundation)..."
+                calibrationProgress = 15
+                calibrationStatus = "Step 1/4 (15%): Measuring Deep Subwoofer (42 Hz Velvet Foundation)..."
                 playStereoTone(42.0, 55.0, leftAmp = 0.8f, rightAmp = 0.8f, durationMs = 1100)
                 calSubDeepDb = liveDeepSubDb
 
-                calibrationStatus = "Step 2/4: Measuring Upper-Bass Cabin Slam (105 Hz Hit Zone)..."
+                calibrationProgress = 40
+                calibrationStatus = "Step 2/4 (40%): Measuring Upper-Bass Cabin Slam (105 Hz Hit Zone)..."
                 playStereoTone(100.0, 120.0, leftAmp = 0.8f, rightAmp = 0.8f, durationMs = 1100)
                 calSubHitDb = liveSubDb
 
-                calibrationStatus = "Step 3/4: Measuring Front Left & Right Component Speakers..."
+                calibrationProgress = 65
+                calibrationStatus = "Step 3/4 (65%): Measuring Front Left & Right Component Speakers..."
                 playStereoTone(440.0, 880.0, leftAmp = 0.85f, rightAmp = 0.0f, durationMs = 950)
                 calFrontLeftDb = liveMidDb
+                calibrationProgress = 80
                 playStereoTone(523.25, 1046.5, leftAmp = 0.0f, rightAmp = 0.85f, durationMs = 950)
                 calFrontRightDb = liveMidDb
 
-                calibrationStatus = "Step 4/4: Measuring Rear Coaxial Surround Speakers (Dolby Phase)..."
+                calibrationProgress = 92
+                calibrationStatus = "Step 4/4 (92%): Measuring Rear Coaxial Surround Speakers (Dolby Phase)..."
                 playStereoTone(392.0, 784.0, leftAmp = 0.85f, rightAmp = -0.85f, durationMs = 1100)
                 calRearSurroundDb = liveMidDb
+                calibrationProgress = 100
 
                 // Compute optimal distortion-free deep-bass-without-hitting profile from measurements
                 val hitPeakDiff = calSubHitDb - calSubDeepDb

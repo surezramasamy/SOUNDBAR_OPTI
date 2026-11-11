@@ -53,6 +53,7 @@ class MainActivity : Activity() {
 
     // Auto-Calibration UI
     private lateinit var autoCalBtn: Button
+    private lateinit var calProgressBar: ProgressBar
     private lateinit var calStatusText: TextView
     private lateinit var calReportText: TextView
 
@@ -258,6 +259,7 @@ class MainActivity : Activity() {
 
         // Auto-Calibration Status
         calStatusText.text = LiveSubPassThroughService.calibrationStatus
+        calProgressBar.progress = LiveSubPassThroughService.calibrationProgress
         calReportText.text = LiveSubPassThroughService.calRecommendation
         autoCalBtn.isEnabled = !LiveSubPassThroughService.isCalibrating
         autoCalBtn.text = if (LiveSubPassThroughService.isCalibrating) {
@@ -661,9 +663,16 @@ class MainActivity : Activity() {
             text = LiveSubPassThroughService.calibrationStatus
             textSize = 12f
             setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 6, 0, 12)
+            setPadding(0, 6, 0, 8)
         }
         calCard.addView(calStatusText)
+
+        calProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progress = 0
+            setPadding(0, 0, 0, 14)
+        }
+        calCard.addView(calProgressBar)
 
         autoCalBtn = Button(this).apply {
             text = "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"

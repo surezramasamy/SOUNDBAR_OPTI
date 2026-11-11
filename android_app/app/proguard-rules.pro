@@ -1,0 +1,2 @@
+-keep class com.soundbaropti.livesub.** { *; }
+-dontwarn kotlin.**

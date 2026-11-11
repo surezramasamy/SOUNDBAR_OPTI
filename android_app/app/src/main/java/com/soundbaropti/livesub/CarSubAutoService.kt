@@ -1,31 +1,28 @@
 package com.soundbaropti.livesub
 
 import android.content.Intent
+import android.media.MediaDescription
+import android.media.MediaMetadata
+import android.media.browse.MediaBrowser.MediaItem
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
-import android.support.v4.media.MediaBrowserCompat
-import android.support.v4.media.MediaDescriptionCompat
-import android.support.v4.media.MediaMetadataCompat
-import android.support.v4.media.session.MediaSessionCompat
-import android.support.v4.media.session.PlaybackStateCompat
-import androidx.media.MediaBrowserServiceCompat
+import android.service.media.MediaBrowserService
 
 /**
- * Android Auto Dashboard Integration for Pioneer DMH-Z5290BT (using official MediaBrowserServiceCompat).
- * Displays live 360° pass-through status, song details, and 1-tap sound profiles on the car screen.
+ * Lightweight, zero-dependency Android Auto Dashboard Service for Pioneer DMH-Z5290BT.
+ * Uses native Android framework MediaBrowserService + MediaSession so the APK stays ultra-small
+ * and installs in under 1 second.
  */
-class CarSubAutoService : MediaBrowserServiceCompat() {
+class CarSubAutoService : MediaBrowserService() {
 
-    private lateinit var mediaSession: MediaSessionCompat
+    private lateinit var mediaSession: MediaSession
 
     override fun onCreate() {
         super.onCreate()
-        mediaSession = MediaSessionCompat(this, "CarSubAutoSessionCompat").apply {
-            setFlags(
-                MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS or
-                MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS
-            )
-            setCallback(object : MediaSessionCompat.Callback() {
+        mediaSession = MediaSession(this, "CarSubAutoSession").apply {
+            setCallback(object : MediaSession.Callback() {
                 override fun onPlay() {
                     startGuardService()
                     updateCarNowPlayingState()
@@ -91,7 +88,7 @@ class CarSubAutoService : MediaBrowserServiceCompat() {
                     notifyChildrenChanged("root")
                 }
 
-                override fun onCustomAction(action: String?, extras: Bundle?) {
+                override fun onCustomAction(action: String, extras: Bundle?) {
                     onPlayFromMediaId(action, extras)
                 }
             })
@@ -114,17 +111,17 @@ class CarSubAutoService : MediaBrowserServiceCompat() {
 
     private fun updateCarNowPlayingState() {
         val running = LiveSubPassThroughService.isRunning
-        val stateCode = if (running) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
+        val stateCode = if (running) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
 
-        val stateBuilder = PlaybackStateCompat.Builder()
+        val stateBuilder = PlaybackState.Builder()
             .setActions(
-                PlaybackStateCompat.ACTION_PLAY or
-                PlaybackStateCompat.ACTION_PAUSE or
-                PlaybackStateCompat.ACTION_PLAY_PAUSE or
-                PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
-                PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
-                PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID or
-                PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH
+                PlaybackState.ACTION_PLAY or
+                PlaybackState.ACTION_PAUSE or
+                PlaybackState.ACTION_PLAY_PAUSE or
+                PlaybackState.ACTION_SKIP_TO_NEXT or
+                PlaybackState.ACTION_SKIP_TO_PREVIOUS or
+                PlaybackState.ACTION_PLAY_FROM_MEDIA_ID or
+                PlaybackState.ACTION_PLAY_FROM_SEARCH
             )
             .setState(stateCode, 0L, 1.0f)
 
@@ -143,10 +140,10 @@ class CarSubAutoService : MediaBrowserServiceCompat() {
             )
         }
 
-        val meta = MediaMetadataCompat.Builder()
-            .putString(MediaMetadataCompat.METADATA_KEY_TITLE, "$songTitle (${NowPlayingListenerService.currentAppName})")
-            .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, dspSummary)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Pioneer DMH-Z5290BT 360° Live Optimizer")
+        val meta = MediaMetadata.Builder()
+            .putString(MediaMetadata.METADATA_KEY_TITLE, "$songTitle (${NowPlayingListenerService.currentAppName})")
+            .putString(MediaMetadata.METADATA_KEY_ARTIST, dspSummary)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM, "Pioneer DMH-Z5290BT 360° Live Optimizer")
             .build()
         mediaSession.setMetadata(meta)
     }
@@ -166,10 +163,10 @@ class CarSubAutoService : MediaBrowserServiceCompat() {
 
     override fun onLoadChildren(
         parentId: String,
-        result: Result<MutableList<MediaBrowserCompat.MediaItem>>
+        result: Result<MutableList<MediaItem>>
     ) {
         updateCarNowPlayingState()
-        val items = mutableListOf<MediaBrowserCompat.MediaItem>()
+        val items = mutableListOf<MediaItem>()
 
         val statusSubtitle = if (LiveSubPassThroughService.isRunning) {
             "ACTIVE • Deep Sub %+.1f dB • Anti-Hit %.1f dB (Tap to Stop)".format(
@@ -235,13 +232,13 @@ class CarSubAutoService : MediaBrowserServiceCompat() {
         result.sendResult(items)
     }
 
-    private fun buildItem(id: String, title: String, subtitle: String): MediaBrowserCompat.MediaItem {
-        val desc = MediaDescriptionCompat.Builder()
+    private fun buildItem(id: String, title: String, subtitle: String): MediaItem {
+        val desc = MediaDescription.Builder()
             .setMediaId(id)
             .setTitle(title)
             .setSubtitle(subtitle)
             .build()
-        return MediaBrowserCompat.MediaItem(desc, MediaBrowserCompat.MediaItem.FLAG_PLAYABLE)
+        return MediaItem(desc, MediaItem.FLAG_PLAYABLE)
     }
 
     override fun onDestroy() {
