@@ -1,0 +1,55 @@
+name: Build Android LiveSubGuard APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Debug APK (Installable on Phone)
+        working-directory: ./android_app
+        run: gradle assembleDebug --no-daemon
+
+      - name: Copy APK to LiveSubGuard.apk
+        run: cp android_app/app/build/outputs/apk/debug/app-debug.apk LiveSubGuard.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LiveSubGuard-APK
+          path: LiveSubGuard.apk
+
+      - name: Publish APK to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0-apk
+          name: "Live Sub Guard Android APK (Spotify + Android Auto)"
+          body: "Download and install **LiveSubGuard.apk** on your Android phone for system-wide Spotify, YouTube Music, and Android Auto live subwoofer pass-through optimization."
+          files: LiveSubGuard.apk
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

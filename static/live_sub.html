@@ -106,13 +106,17 @@
   </div>
 
   <div class="card">
-    <h3>Using with Spotify / YouTube Music on Android</h3>
-    <div style="font-size: 12px; color: var(--muted); line-height: 1.5;">
-      Because phone web browsers are sandboxed from modifying Spotify's internal audio stream directly:
-      <ul style="margin: 6px 0; padding-left: 18px;">
-        <li><b>Option 1 (Native Android Service — Included in Repo):</b> Build the included Kotlin service in <code>android_spotify_passthrough/</code> which attaches Android's <code>DynamicsProcessing</code> Equalizer to <code>audioSessionId = 0</code> so <b>Spotify & YouTube Music</b> pass through this exact mic-driven subwoofer ducker in the background.</li>
-        <li><b>Option 2 (System Wavelet / Dolby Atmos + Live Monitor above):</b> Keep this live monitor running on your dashboard to see the exact live dB cut while Spotify plays.</li>
-      </ul>
+    <h3>📲 Install Android App for Spotify, YouTube Music & Android Auto</h3>
+    <div style="font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 12px;">
+      To automatically filter <b>Spotify, YouTube Music, and Android Auto</b> in the background while driving, install the native <b>LiveSubGuard.apk</b> app on your Android phone:
+    </div>
+    <a href="https://github.com/surezramasamy/SOUNDBAR_OPTI/releases/latest/download/LiveSubGuard.apk" target="_blank" style="text-decoration:none;">
+      <button class="btn" style="background: var(--blue); color: #000; margin-bottom: 8px;">
+        ⬇️ Download LiveSubGuard.apk (Android + Android Auto)
+      </button>
+    </a>
+    <div style="font-size: 11px; color: var(--muted); text-align: center;">
+      Or view build status on <a href="https://github.com/surezramasamy/SOUNDBAR_OPTI/actions" target="_blank" style="color: var(--blue);">GitHub Actions / Releases</a>
     </div>
   </div>
 
