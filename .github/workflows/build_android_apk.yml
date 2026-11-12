@@ -26,6 +26,14 @@ jobs:
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
+      - name: Create fixed signing keystore (once; reused by every later build)
+        run: |
+          if [ ! -f android_app/app/livesub.keystore ]; then
+            keytool -genkeypair -keystore android_app/app/livesub.keystore -storepass livesub123 -keypass livesub123 \
+              -alias livesub -keyalg RSA -keysize 2048 -validity 36500 \
+              -dname "CN=LiveSub360, OU=Dev, O=SoundbarOpti, C=IN"
+          fi
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
@@ -61,5 +69,5 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -f static/LiveSubGuard.apk
+          git add -f static/LiveSubGuard.apk android_app/app/livesub.keystore
           git diff --staged --quiet || (git commit -m "chore: bundle built LiveSubGuard.apk in static/ [skip ci]" && git push origin HEAD:main)

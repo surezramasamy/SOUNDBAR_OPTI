@@ -11,21 +11,31 @@ android {
         applicationId "com.soundbaropti.livesub"
         minSdk 28
         targetSdk 34
-        versionCode 3
-        versionName "2.1"
+        versionCode 4
+        versionName "2.3"
+    }
+
+    // Fixed signing key (committed to repo) so every new build installs cleanly OVER the previous one.
+    // A changing key between builds is what causes Android's "App not installed" error.
+    signingConfigs {
+        livesub {
+            storeFile file('livesub.keystore')
+            storePassword 'livesub123'
+            keyAlias 'livesub'
+            keyPassword 'livesub123'
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
     }
 
     buildTypes {
         debug {
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (file('livesub.keystore').exists()) { signingConfig signingConfigs.livesub }
+            minifyEnabled false
         }
         release {
-            minifyEnabled true
-            shrinkResources true
-            signingConfig signingConfigs.debug
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (file('livesub.keystore').exists()) { signingConfig signingConfigs.livesub }
+            minifyEnabled false
         }
     }
 
