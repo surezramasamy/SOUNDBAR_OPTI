@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Samsung Q930 9.1.4 Test & Confirm dB Calibrator</title>
+  <title>World-Class Distortion-Free Soundbar & Dolby Atmos Calibrator</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -11,24 +11,37 @@
       --border: #30363d;
       --primary: #58a6ff;
       --success: #2ea043;
+      --green-bright: #3fb950;
       --danger: #f85149;
       --warning: #d29922;
+      --purple: #a371f7;
       --text: #c9d1d9;
       --text-bright: #ffffff;
       --muted: #8b949e;
     }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; max-width: 720px; margin-left: auto; margin-right: auto; }
-    h2, h3 { color: var(--text-bright); margin: 4px 0 8px 0; }
-    .badge { background: #1f6feb; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 11px; vertical-align: middle; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; max-width: 780px; margin-left: auto; margin-right: auto; }
+    h2, h3, h4 { color: var(--text-bright); margin: 4px 0 8px 0; }
+    .badge { background: var(--green-bright); color: #000; font-weight: 800; padding: 3px 8px; border-radius: 4px; font-size: 11px; vertical-align: middle; }
     .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 14px; border: 1px solid var(--border); }
-    .checklist { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0; padding-left: 18px; }
-    .btn { background: var(--primary); color: #000; font-weight: 700; border: none; border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; transition: opacity 0.15s; }
+    .checklist { font-size: 12.5px; color: var(--text); line-height: 1.5; margin: 0; padding-left: 18px; }
+    .btn { background: var(--primary); color: #000; font-weight: 700; border: none; border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; transition: 0.15s; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-sm { padding: 7px 11px; font-size: 12px; border-radius: 6px; }
     .btn-outline { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
     .btn-confirm { background: var(--success); color: #fff; }
     .btn-reset { background: #21262d; color: var(--muted); border: 1px solid var(--border); }
+    .preset-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 12px; }
+    .preset-chip { background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 6px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; transition: 0.15s; }
+    .preset-chip.active { background: var(--primary); color: #000; border-color: var(--primary); }
+    .select-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+    .select-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+    .select-box label { display: block; font-size: 10.5px; color: var(--muted); text-transform: uppercase; font-weight: 700; margin-bottom: 4px; }
+    .select-box select { width: 100%; background: #161b22; color: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 6px; font-size: 12.5px; font-weight: 600; }
+    .mode-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    .mode-btn { background: #0d1117; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font-size: 12.5px; font-weight: 700; cursor: pointer; text-align: center; }
+    .mode-btn.active-atmos { background: rgba(163, 113, 247, 0.2); border-color: var(--purple); color: #d2a8ff; }
+    .mode-btn.active-bt { background: rgba(88, 166, 255, 0.2); border-color: var(--primary); color: var(--primary); }
     .top-actions { display: flex; gap: 10px; margin-top: 12px; }
     .meter-wrap { background: #090c10; border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 10px; }
     .meter-bar-bg { background: #21262d; height: 12px; border-radius: 6px; overflow: hidden; margin-top: 6px; }
@@ -39,42 +52,119 @@
     .ch-menu { font-size: 12px; color: var(--primary); font-family: monospace; margin-top: 2px; }
     .ch-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .ch-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; justify-content: space-between; border-top: 1px solid #21262d; padding-top: 10px; }
-    .pill { display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+    .db-table { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; font-family: monospace; background: #161b22; padding: 6px 10px; border-radius: 6px; border: 1px solid #21262d; }
+    .pill { display: inline-block; padding: 6px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; }
     .pill-req { background: #1f2937; border: 1px solid var(--warning); color: #ffd33d; }
     .pill-ok { background: rgba(46, 160, 67, 0.15); border: 1px solid var(--success); color: #3fb950; }
-    .pill-harsh { background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger); color: #ff7b72; font-size: 12px; }
+    .pill-harsh { background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger); color: #ff7b72; font-size: 11.5px; }
     .confirm-box { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; background: #161b22; border-left: 3px solid var(--success); }
     .confirm-box.warn { border-left-color: var(--warning); }
-    .ref-banner { display: flex; justify-content: space-between; align-items: center; background: #1c2128; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid var(--primary); font-size: 13px; }
+    .ref-banner { display: flex; justify-content: space-between; align-items: center; background: #1c2128; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid var(--primary); font-size: 13px; flex-wrap: wrap; gap: 6px; }
     .nav-bar { display: flex; gap: 8px; margin-bottom: 14px; background: #161b22; padding: 6px; border-radius: 10px; border: 1px solid var(--border); }
     .nav-link { flex: 1; text-align: center; text-decoration: none; padding: 9px 10px; border-radius: 7px; font-size: 13px; font-weight: 700; color: var(--muted); transition: 0.15s; }
     .nav-link.active { background: var(--primary); color: #000; }
     .nav-link:not(.active):hover { color: #fff; background: #21262d; }
+    .guide-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+    @media (max-width: 560px) { .guide-grid, .select-grid { grid-template-columns: 1fr; } }
+    .guide-box { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 11px; font-size: 12px; line-height: 1.5; }
+    .eq-row { display: flex; justify-content: space-between; border-bottom: 1px solid #21262d; padding: 4px 0; font-size: 12px; }
   </style>
 </head>
 <body>
 
   <div class="nav-bar">
-    <a href="/" class="nav-link active">🏠 Q930 Soundbar</a>
+    <a href="/" class="nav-link active">🏠 Soundbar & Atmos</a>
     <a href="/car" class="nav-link">🚗 Pioneer Car 4.1</a>
-    <a href="/live-sub" class="nav-link">🎛️ Live Woofer Guard</a>
+    <a href="/live-sub" class="nav-link">🎛️ 360° Sound Guard</a>
   </div>
 
-  <h2>Samsung Q930 Calibrator <span class="badge">9.1.4 TEST & CONFIRM</span></h2>
+  <h2>World-Class Soundbar Calibrator <span class="badge" id="headerLayoutBadge">9.1.4 • 0% DISTORTION</span></h2>
+  <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+    Motto: <b>100% Distortion-Free Premium Sound up to 60%+ Volume</b> • Smooth Non-Fatiguing Deep Bass • Zero Room Boom or Hiss
+  </div>
 
+  <!-- STEP 1: SPEAKER ARCHITECTURE, ATMOS vs BLUETOOTH MODE & NATURAL SOUND SELECTOR -->
   <div class="card">
-    <h3>Step 1: Pre-Test Setup (Stop SpaceFit Hitting)</h3>
+    <h3>Step 1: Select Speaker System Architecture & Calibration Mode</h3>
+    <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">
+      Choose a standard Home Theater preset or customize the exact number of Speakers, Subwoofers, and Up-Firing Atmos drivers:
+    </div>
+
+    <div class="preset-grid">
+      <div class="preset-chip" id="preset-3.1.2" onclick="selectPreset('3.1.2')">3.1.2 Atmos<br><span style="font-size:10px;color:var(--muted);">3 Bed • 1 Sub • 2 Top</span></div>
+      <div class="preset-chip" id="preset-5.1.2" onclick="selectPreset('5.1.2')">5.1.2 Surround<br><span style="font-size:10px;color:var(--muted);">5 Bed • 1 Sub • 2 Top</span></div>
+      <div class="preset-chip" id="preset-7.1.2" onclick="selectPreset('7.1.2')">7.1.2 Cinema<br><span style="font-size:10px;color:var(--muted);">7 Bed • 1 Sub • 2 Top</span></div>
+      <div class="preset-chip active" id="preset-9.1.4" onclick="selectPreset('9.1.4')">9.1.4 Flagship<br><span style="font-size:10px;color:var(--muted);">Q930 • 9 Bed • 1 Sub • 4 Top</span></div>
+      <div class="preset-chip" id="preset-11.1.4" onclick="selectPreset('11.1.4')">11.1.4 Reference<br><span style="font-size:10px;color:var(--muted);">Q990 • 11 Bed • 1 Sub • 4 Top</span></div>
+      <div class="preset-chip" id="preset-11.2.4" onclick="selectPreset('11.2.4')">11.2.4 Dual-Sub<br><span style="font-size:10px;color:var(--muted);">11 Bed • 2 Subs • 4 Top</span></div>
+    </div>
+
+    <div class="select-grid">
+      <div class="select-box">
+        <label>Ear-Level Bed Speakers</label>
+        <select id="bedSelect" onchange="applyCustomConfig()">
+          <option value="3">3 Speakers (Front L / C / R)</option>
+          <option value="5">5 Speakers (+ Rear L/R)</option>
+          <option value="7">7 Speakers (+ Side & Rear)</option>
+          <option value="9" selected>9 Speakers (+ Side, Wide & Rear)</option>
+          <option value="11">11 Speakers (+ Rear-Side L/R)</option>
+        </select>
+      </div>
+      <div class="select-box">
+        <label>Subwoofers (Woofers)</label>
+        <select id="subSelect" onchange="applyCustomConfig()">
+          <option value="1" selected>1 Subwoofer (.1 Deep Velvet)</option>
+          <option value="2">2 Subwoofers (.2 Dual-Sub Balance)</option>
+        </select>
+      </div>
+      <div class="select-box">
+        <label>Atmos Up-Firing Speakers</label>
+        <select id="atmosSelect" onchange="applyCustomConfig()">
+          <option value="0">0 Up-Firing (Standard Surround)</option>
+          <option value="2">2 Up-Firing (Front Top Atmos)</option>
+          <option value="4" selected>4 Up-Firing (Front Top + Rear Top)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="font-size: 11.5px; color: var(--muted); font-weight: 700; text-transform: uppercase; margin-top: 10px;">
+      Calibration Signal Routing Mode:
+    </div>
+    <div class="mode-row">
+      <div id="modeAtmosBtn" class="mode-btn active-atmos" onclick="setCalMode('atmos')">
+        🌌 Dolby Atmos 3D Spatial Mode<br>
+        <span style="font-size:11px; font-weight:400; color:var(--muted);">Real 3D Height HRTF + Ceiling-Bounce Cues</span>
+      </div>
+      <div id="modeBtBtn" class="mode-btn" onclick="setCalMode('bluetooth')">
+        📶 Bluetooth Surround Matrix Mode<br>
+        <span style="font-size:11px; font-weight:400; color:var(--muted);">180° Dolby Phase-Matrix Steering over BT</span>
+      </div>
+    </div>
+
+    <div style="margin-top: 10px;" class="select-box">
+      <label>Natural Calibration Sound Type (No Artificial Ding-Dong)</label>
+      <select id="soundStyleSelect" onchange="applyCustomConfig()">
+        <option value="natural" selected>🌿 Natural Studio Acoustic (Bowed Cello Sub • Concert Grand Piano • Warm Guitar • Atmos Rain + Pink Bed)</option>
+        <option value="atmos_cinema">🌌 Dolby Atmos 3D Cinema Soundscape (Velvet Sub Wave • Overhead Canopy • Spatial Strings)</option>
+        <option value="pink_iso">🎚️ Pure Studio Smooth Pink Reference Breeze (Dolby / THX ISO 1/3-Octave Precision)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- STEP 2: PRE-TEST CHECKLIST & RUN CONTROLS -->
+  <div class="card">
+    <h3>Step 2: 60% Master Volume Distortion-Free Calibration</h3>
     <ol class="checklist">
-      <li>On Samsung Remote, set Sound Mode to <b>SURROUND</b> or <b>STANDARD</b> and turn <b>SpaceFit Sound OFF</b>.</li>
-      <li>Set all <b>CH LEVEL</b> values and <b>WOOFER</b> to <b>0</b> initially, and set Master Volume to your normal movie level (e.g. 18–22).</li>
-      <li>Sit on your sofa, hold the phone at <b>ear height</b> facing the soundbar, and tap <b>Test All 8 Channels</b>.</li>
-      <li>After setting the recommended dB on your remote, tap <b>Confirm dB</b> on any channel to verify it is balanced.</li>
+      <li>Set Soundbar Volume to <b>50%–60%</b> (your loud cinema reference level) and set all <b>CH LEVEL</b> & <b>WOOFER</b> to <b>0</b> initially.</li>
+      <li>Turn <b>Bass Enhancement / Extra Bass OFF</b> (this prevents tiring 100 Hz boomy resonance during continuous movie watching).</li>
+      <li>Hold your phone at <b>ear height</b> at your main seating position and tap <b>▶ Calibrate All Selected Channels</b>.</li>
+      <li>The analyzer measures <b>Exact Measured dB</b>, <b>Actual Required dB</b>, <b>THD Distortion %</b>, <b>Room Boom (80–140 Hz)</b>, and <b>Room Hiss (>8 kHz)</b>.</li>
     </ol>
 
     <div class="meter-wrap">
       <div style="display:flex; justify-content:space-between; font-size:12px;">
-        <span id="statusLabel">Status: Idle — Ready to test</span>
-        <span id="liveMicLabel">Mic Level: --</span>
+        <span id="statusLabel">Status: Idle — Ready to calibrate</span>
+        <span id="liveMicLabel">Live Mic SPL: -- dBC</span>
       </div>
       <div class="meter-bar-bg">
         <div id="liveMicBar" class="meter-bar"></div>
@@ -82,40 +172,163 @@
     </div>
 
     <div class="top-actions">
-      <button id="runAllBtn" class="btn" style="flex:2;" onclick="runFullSweep()">▶ Test All 8 Channels</button>
+      <button id="runAllBtn" class="btn" style="flex:2;" onclick="runFullSweep()">▶ Calibrate All Selected Channels</button>
       <button id="resetBtn" class="btn btn-reset" style="flex:1;" onclick="resetAll()">Reset</button>
     </div>
   </div>
 
   <div id="refBanner" class="ref-banner" style="display:none;">
-    <div><b>Reference Anchor (Front L/R):</b> <span id="refValue">-- dB</span></div>
-    <div style="color:var(--muted); font-size:12px;">All channels balanced to this anchor</div>
+    <div><b>60% Volume Reference Anchor:</b> <span id="refValue">-- dB</span></div>
+    <div id="modeBannerLabel" style="color:var(--primary); font-size:12px; font-weight:700;">--</div>
+  </div>
+
+  <!-- WORLD-CLASS MOVIE & MUSIC TUNING REPORT (SHOWN AS SOON AS CHANNELS ARE MEASURED) -->
+  <div id="worldClassGuideCard" class="card" style="display:none; border-color: var(--green-bright);">
+    <h3>🏆 World-Class Distortion-Free Soundbar Settings (Up to 60%+ Volume)</h3>
+    <div id="wcSweetSpot" style="font-size:12.5px; color:var(--green-bright); font-weight:700; margin-bottom:6px;"></div>
+    <div id="wcSmoothBass" style="font-size:12px; color:var(--text); background:#0d1117; padding:10px; border-radius:8px; border-left:3px solid var(--primary); margin-bottom:10px;"></div>
+
+    <div class="guide-grid">
+      <div class="guide-box">
+        <h4 style="color:var(--primary); margin-top:0;">🎬 Premium Movie Cinema Preset</h4>
+        <div id="wcMovieBox"></div>
+      </div>
+      <div class="guide-box">
+        <h4 style="color:var(--green-bright); margin-top:0;">🎵 Audiophile Music Studio Preset</h4>
+        <div id="wcMusicBox"></div>
+      </div>
+    </div>
+
+    <div class="guide-box" style="margin-top:10px;">
+      <h4 style="color:#ffd33d; margin-top:0;">🎚️ Anti-Boom & Anti-Hiss Room EQ Settings (Zero Ear Fatigue)</h4>
+      <div id="wcEqBox"></div>
+    </div>
   </div>
 
   <div id="channelContainer"></div>
 
   <script>
     let channels = [];
-    let calSummary = { reference_db: null, channels: {} };
+    let currentLayout = '9.1.4';
+    let currentCalMode = 'atmos';
+    let currentSoundStyle = 'natural';
+    let calSummary = { reference_db: null, channels: {}, world_class_guide: null };
     let isBusy = false;
 
     async function initApp() {
       const res = await fetch('/api/channels');
       const data = await res.json();
-      channels = data.channels;
+      syncUiFromChannelData(data);
       const calRes = await fetch('/api/calculate-calibration');
       calSummary = await calRes.json();
       renderChannels();
+    }
+
+    function syncUiFromChannelData(data) {
+      channels = data.channels || [];
+      currentLayout = data.layout || '9.1.4';
+      currentCalMode = data.cal_mode || 'atmos';
+      currentSoundStyle = data.sound_style || 'natural';
+
+      document.getElementById('bedSelect').value = String(data.bed_count);
+      document.getElementById('subSelect').value = String(data.sub_count);
+      document.getElementById('atmosSelect').value = String(data.atmos_count);
+      document.getElementById('soundStyleSelect').value = currentSoundStyle;
+      document.getElementById('headerLayoutBadge').innerText = `${currentLayout} • 0% DISTORTION`;
+      document.getElementById('runAllBtn').innerText = `▶ Calibrate All ${channels.length} Channels (${currentLayout})`;
+
+      ['3.1.2', '5.1.2', '7.1.2', '9.1.4', '11.1.4', '11.2.4'].forEach(p => {
+        const el = document.getElementById(`preset-${p}`);
+        if (el) el.className = (p === currentLayout) ? 'preset-chip active' : 'preset-chip';
+      });
+
+      document.getElementById('modeAtmosBtn').className = (currentCalMode === 'atmos') ? 'mode-btn active-atmos' : 'mode-btn';
+      document.getElementById('modeBtBtn').className = (currentCalMode === 'bluetooth') ? 'mode-btn active-bt' : 'mode-btn';
+    }
+
+    async function selectPreset(presetCode) {
+      if (isBusy) return;
+      const style = document.getElementById('soundStyleSelect').value;
+      const res = await fetch(`/api/channels?preset=${encodeURIComponent(presetCode)}&cal_mode=${currentCalMode}&sound_style=${style}`);
+      const data = await res.json();
+      syncUiFromChannelData(data);
+      const calRes = await fetch('/api/calculate-calibration');
+      calSummary = await calRes.json();
+      renderChannels();
+    }
+
+    async function applyCustomConfig() {
+      if (isBusy) return;
+      const bed = document.getElementById('bedSelect').value;
+      const subs = document.getElementById('subSelect').value;
+      const atmos = document.getElementById('atmosSelect').value;
+      const style = document.getElementById('soundStyleSelect').value;
+      const res = await fetch(`/api/channels?bed=${bed}&subs=${subs}&atmos=${atmos}&cal_mode=${currentCalMode}&sound_style=${style}`);
+      const data = await res.json();
+      syncUiFromChannelData(data);
+      const calRes = await fetch('/api/calculate-calibration');
+      calSummary = await calRes.json();
+      renderChannels();
+    }
+
+    async function setCalMode(mode) {
+      if (isBusy) return;
+      currentCalMode = mode;
+      await applyCustomConfig();
+    }
+
+    function renderWorldClassGuide() {
+      const card = document.getElementById('worldClassGuideCard');
+      const g = calSummary.world_class_guide;
+      if (!g) {
+        card.style.display = 'none';
+        return;
+      }
+      card.style.display = 'block';
+      document.getElementById('wcSweetSpot').innerText = `🔊 Master Volume Sweet Spot: ${g.master_volume_sweet_spot} | Mode: ${g.calibration_mode_used}`;
+      document.getElementById('wcSmoothBass').innerHTML = `<b>🌊 Smooth Deep Non-Fatiguing Bass Setup:</b> ${g.smooth_deep_bass_secret}`;
+
+      const mv = g.movie_experience_preset || {};
+      document.getElementById('wcMovieBox').innerHTML = `
+        <div>• <b>Sound Mode:</b> ${mv.sound_mode}</div>
+        <div>• <b>Woofer Level:</b> <span style="color:#ffd33d;font-weight:700;">${mv.woofer_level}</span></div>
+        <div>• <b>SpaceFit Sound:</b> ${mv.spacefit_sound}</div>
+        <div>• <b>Voice / AVA:</b> ${mv.voice_enhancement_ava}</div>
+        <div>• <b>Bass Enhancement:</b> <span style="color:#3fb950;font-weight:700;">${mv.bass_enhancement}</span></div>
+        <div>• <b>Virtual 3D:</b> ${mv.virtual_surround}</div>
+      `;
+
+      const mu = g.music_experience_preset || {};
+      document.getElementById('wcMusicBox').innerHTML = `
+        <div>• <b>Sound Mode:</b> ${mu.sound_mode}</div>
+        <div>• <b>Musical Woofer Trim:</b> <span style="color:#3fb950;font-weight:700;">${mu.woofer_level}</span></div>
+        <div>• <b>Source Headroom Tip:</b> ${mu.audio_source_tip}</div>
+      `;
+
+      const eq = g.anti_hiss_and_boom_eq || {};
+      document.getElementById('wcEqBox').innerHTML = `
+        <div class="eq-row"><span><b>63 Hz (Deep Velvet Sub)</b></span><span style="color:#3fb950;font-weight:700;">${eq['63_hz_deep_sub']}</span></div>
+        <div class="eq-row"><span><b>125 Hz (Anti-Hit / Anti-Boom)</b></span><span style="color:#ffd33d;font-weight:700;">${eq['125_hz_upper_bass_hit']}</span></div>
+        <div class="eq-row"><span><b>250 Hz (Room Mud Cut)</b></span><span>${eq['250_hz_room_mud']}</span></div>
+        <div class="eq-row"><span><b>1 kHz – 2 kHz (Vocal Clarity)</b></span><span>${eq['2_khz_presence']}</span></div>
+        <div class="eq-row"><span><b>4 kHz (Anti-Harshness)</b></span><span style="color:#ffd33d;font-weight:700;">${eq['4_khz_sibilance']}</span></div>
+        <div class="eq-row"><span><b>8–10 kHz (Anti-Hiss Silk Air)</b></span><span>${eq['8_khz_to_10_khz_air']}</span></div>
+        <div style="margin-top:6px; color:var(--primary); font-weight:700;">2-Band Tone Control: ${eq['simple_tone_control']}</div>
+      `;
     }
 
     function renderChannels() {
       const refBanner = document.getElementById('refBanner');
       if (calSummary.reference_db !== null) {
         refBanner.style.display = 'flex';
-        document.getElementById('refValue').innerText = `${calSummary.reference_db} dB SPL (${calSummary.reference_source})`;
+        document.getElementById('refValue').innerText = `${calSummary.reference_db} dBC (${calSummary.reference_source})`;
+        document.getElementById('modeBannerLabel').innerText =
+          currentCalMode === 'atmos' ? '🌌 Dolby Atmos 3D Spatial Active' : '📶 Bluetooth Surround Matrix Active';
       } else {
         refBanner.style.display = 'none';
       }
+
+      renderWorldClassGuide();
 
       const container = document.getElementById('channelContainer');
       container.innerHTML = '';
@@ -127,18 +340,22 @@
         if (res) {
           const isRef = ch.id === 'front_left_right';
           const reqClass = (res.required_remote_db === 0 && !res.is_harsh) ? 'pill-ok' : 'pill-req';
+          const deltaStr = `${res.db_error_delta > 0 ? '+' : ''}${res.db_error_delta} dB`;
+          const thdColor = res.thd_distortion_pct > 1.8 ? '#f85149' : '#3fb950';
+
           const harshBadge = res.is_harsh
-            ? `<span class="pill pill-harsh">⚠️ ${res.diagnosis}</span>`
-            : `<span style="font-size:12px; color:#3fb950;">✓ Clean (${res.peak_freq_hz} Hz peak)</span>`;
+            ? `<div class="pill pill-harsh" style="margin-top:6px;">⚠️ ${res.diagnosis}</div>`
+            : `<div style="font-size:12px; color:#3fb950; margin-top:6px;">✓ ${res.diagnosis}</div>`;
 
           let confirmHtml = '';
           if (res.confirmation) {
             const c = res.confirmation;
             const boxClass = c.is_confirmed ? 'confirm-box' : 'confirm-box warn';
-            const icon = c.is_confirmed ? '✅ CONFIRMED:' : '🔧 FINE-TUNE:';
+            const icon = c.is_confirmed ? '✅ CONFIRMED DISTORTION-FREE:' : '🔧 FINE-TUNE REQUIRED:';
             confirmHtml = `
               <div class="${boxClass}">
-                <b>${icon}</b> Re-tested at <b>${c.post_db} dB</b> (Error: ${c.residual_error_db > 0 ? '+' : ''}${c.residual_error_db} dB vs target ${res.target_db} dB).
+                <b>${icon}</b> Post-Adjustment Measured: <b>${c.post_db} dBC</b> vs Actual Required: <b>${res.target_db} dBC</b>
+                (Delta: ${c.residual_error_db > 0 ? '+' : ''}${c.residual_error_db} dB | THD: ${c.thd_distortion_pct}%).<br>
                 ${c.fine_tune_suggestion}
               </div>
             `;
@@ -146,11 +363,14 @@
 
           metricsHtml = `
             <div class="ch-metrics">
-              <div>
-                <div style="font-size:12px; color:var(--muted);">
-                  Initial: <b>${res.initial_measured_db} dB</b> | Target: <b>${res.target_db} dB</b>
+              <div style="flex:1; min-width:240px;">
+                <div class="db-table">
+                  <span>Measured: <b style="color:#fff;">${res.initial_measured_db} dBC</b></span>
+                  <span>| Required: <b style="color:var(--primary);">${res.target_db} dBC</b></span>
+                  <span>| Delta: <b style="color:#ffd33d;">${deltaStr}</b></span>
+                  <span>| THD: <b style="color:${thdColor};">${res.thd_distortion_pct}%</b></span>
                 </div>
-                <div style="margin-top:4px;">${harshBadge}</div>
+                ${harshBadge}
               </div>
               <div style="text-align:right;">
                 <span class="pill ${reqClass}">
@@ -169,12 +389,12 @@
             <div class="ch-header">
               <div>
                 <div class="ch-title">${ch.name}</div>
-                <div class="ch-menu">Remote: ${ch.remote_menu}</div>
+                <div class="ch-menu">Remote Setting: ${ch.remote_menu}</div>
                 <div class="ch-desc">${ch.desc}</div>
               </div>
               <div style="display:flex; gap:6px; flex-shrink:0;">
                 <button class="btn btn-sm btn-outline" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'initial')">
-                  ${res ? 'Re-Measure' : 'Test (at 0 dB)'}
+                  ${res ? 'Re-Measure' : 'Test Channel'}
                 </button>
                 ${canConfirm ? `
                   <button class="btn btn-sm btn-confirm" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'confirm')">
@@ -189,7 +409,6 @@
       });
     }
 
-    // Encode Float32 audio samples into genuine 16-bit RIFF WAV Blob (works on all Android & iOS browsers)
     function encodeWAV(samples, sampleRate) {
       const buffer = new ArrayBuffer(44 + samples.length * 2);
       const view = new DataView(buffer);
@@ -201,8 +420,8 @@
       writeString(8, 'WAVE');
       writeString(12, 'fmt ');
       view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true); // PCM
-      view.setUint16(22, 1, true); // Mono
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
       view.setUint32(24, sampleRate, true);
       view.setUint32(28, sampleRate * 2, true);
       view.setUint16(32, 2, true);
@@ -222,8 +441,9 @@
       const statusEl = document.getElementById('statusLabel');
       const micLabel = document.getElementById('liveMicLabel');
       const micBar = document.getElementById('liveMicBar');
+      const style = document.getElementById('soundStyleSelect').value;
 
-      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Ding-Dong Chime'}: ${ch.name}...`;
+      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Natural Reference'}: ${ch.name} (${currentCalMode.toUpperCase()})...`;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -247,21 +467,19 @@
         const rms = Math.sqrt(sum / input.length);
         const db = Math.max(0, Math.min(100, (20 * Math.log10(rms + 1e-6) + 80) * 1.4));
         micBar.style.width = `${db.toFixed(0)}%`;
-        micLabel.innerText = `Mic: ${(db * 0.6 + 40).toFixed(1)} dB`;
+        micLabel.innerText = `Live Mic: ${(db * 0.6 + 40).toFixed(1)} dBC`;
       };
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
 
-      // Play calibration pink noise for this channel (cache-busted so new spatial matrix WAV is always fetched)
-      const player = new Audio(`/api/tone/${ch.id}?duration=3.2&v=${Date.now()}`);
+      const player = new Audio(`/api/tone/${ch.id}?duration=3.4&cal_mode=${currentCalMode}&sound_style=${style}&v=${Date.now()}`);
       await player.play();
 
       await new Promise(resolve => {
         player.onended = () => setTimeout(resolve, 250);
       });
 
-      // Stop recording and package WAV
       processor.disconnect();
       source.disconnect();
       stream.getTracks().forEach(t => t.stop());
@@ -277,11 +495,12 @@
       }
 
       const wavBlob = encodeWAV(merged, sampleRate);
-      statusEl.innerText = `Analyzing ${ch.name}...`;
+      statusEl.innerText = `Analyzing SPL dB, THD% & Room Acoustics for ${ch.name}...`;
 
       const formData = new FormData();
       formData.append('channel_id', ch.id);
       formData.append('mode', mode);
+      formData.append('cal_mode', currentCalMode);
       formData.append('audio_file', wavBlob, `${ch.id}.wav`);
 
       const resp = await fetch('/api/analyze-channel', { method: 'POST', body: formData });
@@ -322,7 +541,7 @@
           renderChannels();
           await new Promise(r => setTimeout(r, 400));
         }
-        document.getElementById('statusLabel').innerText = 'All 8 Channels Tested! Set Remote dB & tap Confirm dB.';
+        document.getElementById('statusLabel').innerText = `All ${channels.length} Channels Calibrated! Review World-Class Settings below.`;
       } catch (err) {
         alert('Calibration interrupted: ' + err.message);
       } finally {
@@ -337,7 +556,7 @@
       await fetch('/api/reset', { method: 'POST' });
       const calRes = await fetch('/api/calculate-calibration');
       calSummary = await calRes.json();
-      document.getElementById('statusLabel').innerText = 'Status: Reset — Ready to test';
+      document.getElementById('statusLabel').innerText = 'Status: Reset — Ready to calibrate';
       renderChannels();
     }
 

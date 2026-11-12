@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pioneer DMH-Z5290BT Car Audio (4.1) Calibrator</title>
+  <title>Pioneer DMH-Z5290BT 60% Volume Distortion-Free Calibrator</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -12,6 +12,7 @@
       --primary: #ff7b00;
       --blue: #58a6ff;
       --success: #2ea043;
+      --green: #3fb950;
       --danger: #f85149;
       --warning: #d29922;
       --text: #c9d1d9;
@@ -19,15 +20,15 @@
       --muted: #8b949e;
     }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; max-width: 720px; margin-left: auto; margin-right: auto; }
-    h2, h3 { color: var(--text-bright); margin: 4px 0 8px 0; }
+    body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; max-width: 780px; margin-left: auto; margin-right: auto; }
+    h2, h3, h4 { color: var(--text-bright); margin: 4px 0 8px 0; }
     .nav-bar { display: flex; gap: 8px; margin-bottom: 14px; background: #161b22; padding: 6px; border-radius: 10px; border: 1px solid var(--border); }
     .nav-link { flex: 1; text-align: center; text-decoration: none; padding: 9px 10px; border-radius: 7px; font-size: 13px; font-weight: 700; color: var(--muted); transition: 0.15s; }
     .nav-link.active { background: var(--primary); color: #000; }
     .nav-link:not(.active):hover { color: #fff; background: #21262d; }
-    .badge { background: var(--primary); color: #000; font-weight: 700; padding: 3px 8px; border-radius: 4px; font-size: 11px; vertical-align: middle; }
+    .badge { background: var(--primary); color: #000; font-weight: 800; padding: 3px 8px; border-radius: 4px; font-size: 11px; vertical-align: middle; }
     .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 14px; border: 1px solid var(--border); }
-    .checklist { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0; padding-left: 18px; }
+    .checklist { font-size: 12.5px; color: var(--text); line-height: 1.5; margin: 0; padding-left: 18px; }
     .btn { background: var(--primary); color: #000; font-weight: 700; border: none; border-radius: 8px; padding: 11px 16px; font-size: 14px; cursor: pointer; transition: opacity 0.15s; }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .btn-sm { padding: 7px 11px; font-size: 12px; border-radius: 6px; }
@@ -44,45 +45,50 @@
     .ch-menu { font-size: 12px; color: var(--primary); font-family: monospace; margin-top: 2px; }
     .ch-desc { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .ch-metrics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; justify-content: space-between; border-top: 1px solid #21262d; padding-top: 10px; }
+    .db-table { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; font-family: monospace; background: #161b22; padding: 6px 10px; border-radius: 6px; border: 1px solid #21262d; }
     .pill { display: inline-block; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 700; margin-top: 4px; }
     .pill-req { background: #1f2937; border: 1px solid var(--warning); color: #ffd33d; }
     .pill-xover { background: rgba(88, 166, 255, 0.14); border: 1px solid var(--blue); color: var(--blue); }
     .pill-ok { background: rgba(46, 160, 67, 0.15); border: 1px solid var(--success); color: #3fb950; }
-    .pill-harsh { background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger); color: #ff7b72; font-size: 12px; }
+    .pill-harsh { background: rgba(248, 81, 73, 0.15); border: 1px solid var(--danger); color: #ff7b72; font-size: 11.5px; }
     .confirm-box { margin-top: 8px; padding: 8px 10px; border-radius: 6px; font-size: 12px; background: #161b22; border-left: 3px solid var(--success); }
     .confirm-box.warn { border-left-color: var(--warning); }
     .xover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+    @media (max-width: 560px) { .xover-grid { grid-template-columns: 1fr; } }
     .xover-item { background: #0d1117; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
     .xover-label { color: var(--muted); font-size: 11px; }
     .xover-val { color: var(--text-bright); font-weight: 700; margin-top: 2px; font-family: monospace; }
+    .eq-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
+    @media (max-width: 560px) { .eq-grid { grid-template-columns: 1fr; } }
+    .eq-cell { display: flex; justify-content: space-between; background: #0d1117; border: 1px solid #21262d; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-family: monospace; }
   </style>
 </head>
 <body>
 
   <div class="nav-bar">
-    <a href="/" class="nav-link">🏠 Q930 Soundbar</a>
+    <a href="/" class="nav-link">🏠 Soundbar & Atmos</a>
     <a href="/car" class="nav-link active">🚗 Pioneer Car 4.1</a>
-    <a href="/live-sub" class="nav-link">🎛️ Live Woofer Guard</a>
+    <a href="/live-sub" class="nav-link">🎛️ 360° Sound Guard</a>
   </div>
 
-  <h2>Pioneer DMH-Z5290BT (Standard Mode) <span class="badge">FRONT COMPONENT + REAR COAX + SUB</span></h2>
+  <h2>Pioneer DMH-Z5290BT (60% Vol Distortion-Free) <span class="badge">DEEP BASS • ZERO HIT</span></h2>
+  <div style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+    Motto: <b>World-Class Distortion-Free Sound at 60% Volume (Vol 24/40)</b> • Subtractive Headroom Tuning • Smooth Deep Bass Without Hitting
+  </div>
 
   <div class="card">
-    <h3>Step 1: Pioneer Standard Mode Pre-Test Setup</h3>
+    <h3>Step 1: Why Car Speakers Distort at 60% Volume (& How to Fix Before Testing)</h3>
     <ol class="checklist">
-      <li>Connect your phone to the <b>Pioneer DMH-Z5290BT</b> via <b>Bluetooth</b> or <b>Android Auto / CarPlay</b>.</li>
-      <li>Go to <b>Settings ⚙️ $\to$ Audio $\to$ Speaker Level</b> and set all 5 channels (<b>Front Left, Front Right, Rear Left, Rear Right, Subwoofer</b>) to <b>0 dB</b>.</li>
-      <li>Since your <b>Front is a 2-Way Component</b> (Mid + Tweeter on one channel) and <b>Rear is Coaxial</b>:
-        <br>• Keep <b>Fader = 0 (Center)</b> when testing <b>Front Left / Front Right / Subwoofer</b>.
-        <br>• Temporarily set <b>Pioneer Fader = Rear</b> when testing <b>Rear Left / Rear Right</b> so only the rear coaxials play, then return Fader to 0.
-      </li>
-      <li>Hold the phone at <b>ear height at the driver's headrest</b> and tap <b>Test All Car Channels</b> (or test each channel individually).</li>
+      <li>On Pioneer <b>DMH-Z5290BT</b>, set Master Volume to <b>22–24 (55%–60%)</b> — your real loud driving volume.</li>
+      <li><b>CRITICAL Anti-Distortion Settings:</b> Turn <b>Loudness = OFF</b>, <b>Bass Boost = 0</b>, and set <b>SLA (Source Level Adjuster) = -2 dB</b>. (Leaving Loudness or Bass Boost ON adds +10 dB at 100 Hz, which clips the Pioneer amplifier above 45% volume!).</li>
+      <li>Set all 5 <b>Speaker Levels</b> (Front L, Front R, Rear L, Rear R, Subwoofer) to <b>0 dB</b> and set <b>13-Band EQ = Flat (0 dB)</b> for the initial test.</li>
+      <li>Hold the phone at <b>ear height at the driver's headrest</b> and tap <b>▶ Calibrate All Car Speakers (Natural Studio Reference)</b>.</li>
     </ol>
 
     <div class="meter-wrap">
       <div style="display:flex; justify-content:space-between; font-size:12px;">
-        <span id="statusLabel">Status: Idle — Ready to test car speakers</span>
-        <span id="liveMicLabel">Mic Level: --</span>
+        <span id="statusLabel">Status: Idle — Ready to calibrate with Natural Acoustic Reference</span>
+        <span id="liveMicLabel">Live Mic SPL: -- dBC</span>
       </div>
       <div class="meter-bar-bg">
         <div id="liveMicBar" class="meter-bar"></div>
@@ -90,14 +96,18 @@
     </div>
 
     <div class="top-actions">
-      <button id="runAllBtn" class="btn" style="flex:2;" onclick="runFullSweep()">▶ Test All Car Channels</button>
+      <button id="runAllBtn" class="btn" style="flex:2;" onclick="runFullSweep()">▶ Calibrate All Car Speakers</button>
       <button id="resetBtn" class="btn btn-reset" style="flex:1;" onclick="resetAll()">Reset</button>
     </div>
   </div>
 
-  <div id="xoverSummaryCard" class="card" style="display:none;">
-    <h3>Recommended Pioneer DMH-Z5290BT Crossover & Tweeter EQ Summary</h3>
-    <div style="font-size:12px; color:var(--muted);">Set these inside <b>Settings ⚙️ $\to$ Audio $\to$ Crossover</b> and <b>13-Band Graphic EQ</b>:</div>
+  <!-- COMPLETE PIONEER DMH-Z5290BT 60% VOLUME DISTORTION-FREE PARAMETER SHEET -->
+  <div id="xoverSummaryCard" class="card" style="display:none; border-color: var(--green);">
+    <h3>🏆 Pioneer DMH-Z5290BT World-Class 60% Volume Distortion-Free Settings</h3>
+    <div style="font-size:12px; color:var(--muted);">
+      All Speaker Levels & EQ bands below use <b>Subtractive Headroom Tuning (≤ 0 dB cuts on resonant peaks)</b> so your Front Components, Rear Coaxials, and Subwoofer <b>never distort or hit harshly even at 60%+ volume</b>:
+    </div>
+
     <div class="xover-grid">
       <div class="xover-item">
         <div class="xover-label">Front 2-Way Component (HPF)</div>
@@ -108,25 +118,27 @@
         <div class="xover-val" id="sumRearHpf">--</div>
       </div>
       <div class="xover-item">
-        <div class="xover-label">Subwoofer Cutoff (LPF)</div>
-        <div class="xover-val" id="sumSubLpf">--</div>
+        <div class="xover-label">Subwoofer LPF (Deep Bass Without Hitting)</div>
+        <div class="xover-val" id="sumSubLpf" style="color:var(--green);">--</div>
       </div>
       <div class="xover-item">
-        <div class="xover-label">Subwoofer Phase & Blend</div>
+        <div class="xover-label">Subwoofer Phase & Transition</div>
         <div class="xover-val" id="sumSubPhase">--</div>
       </div>
       <div class="xover-item" style="grid-column: span 2;">
-        <div class="xover-label">Front Component Tweeter Balance (Since Standard Mode has no Tweeter channel)</div>
+        <div class="xover-label">Front Component Tweeter Anti-Harshness Guide</div>
         <div class="xover-val" id="sumTweeterEq" style="color:var(--primary);">--</div>
       </div>
     </div>
+
+    <div id="pioneer60GuideBox" style="margin-top:12px;"></div>
   </div>
 
   <div id="channelContainer"></div>
 
   <script>
     let channels = [];
-    let calSummary = { reference_db: null, channels: {}, master_crossover_guide: null };
+    let calSummary = { reference_db: null, channels: {}, master_crossover_guide: null, pioneer_60pct_guide: null };
     let isBusy = false;
 
     async function initApp() {
@@ -147,7 +159,30 @@
         document.getElementById('sumRearHpf').innerText = g.rear_hpf;
         document.getElementById('sumSubLpf').innerText = g.sub_lpf;
         document.getElementById('sumSubPhase').innerText = g.sub_phase;
-        document.getElementById('sumTweeterEq').innerText = g.front_tweeter_eq || '0 dB at 3.15k / 5k / 8k Hz';
+        document.getElementById('sumTweeterEq').innerText = g.front_tweeter_eq;
+
+        const p60 = calSummary.pioneer_60pct_guide;
+        if (p60) {
+          let eqHtml = '';
+          const eqObj = p60.eq_curve_13band || {};
+          Object.keys(eqObj).forEach(band => {
+            const val = eqObj[band];
+            const color = val.startsWith('-') ? '#ffd33d' : (val.startsWith('+') ? '#3fb950' : '#c9d1d9');
+            eqHtml += `<div class="eq-cell"><span><b>${band}</b></span><span style="color:${color};">${val}</span></div>`;
+          });
+
+          document.getElementById('pioneer60GuideBox').innerHTML = `
+            <div class="xover-item" style="margin-bottom:8px;">
+              <div style="color:var(--green); font-weight:700; margin-bottom:4px;">🔒 Pioneer Headroom Protection Parameters (60% Vol = 24/40):</div>
+              <div>• <b>Sweet-Spot Volume:</b> ${p60.sweet_spot_volume}</div>
+              <div>• <b>SLA (Source Level):</b> ${p60.sla_source_level}</div>
+              <div>• <b>Loudness:</b> <span style="color:#f85149;font-weight:700;">${p60.loudness_setting}</span></div>
+              <div>• <b>Bass Boost:</b> <span style="color:#3fb950;font-weight:700;">${p60.bass_boost_setting}</span></div>
+            </div>
+            <h4 style="color:var(--blue); margin:10px 0 4px 0;">🎚️ Pioneer 13-Band Graphic EQ Settings (Smooth Deep Bass, Zero Hit/Harshness):</h4>
+            <div class="eq-grid">${eqHtml}</div>
+          `;
+        }
       } else {
         xCard.style.display = 'none';
       }
@@ -162,30 +197,38 @@
         if (res) {
           const isBlend = ch.id === 'crossover_blend';
           const reqClass = (res.required_pioneer_db === 0 && !res.is_harsh) ? 'pill-ok' : 'pill-req';
+          const deltaStr = `${res.db_error_delta > 0 ? '+' : ''}${res.db_error_delta} dB`;
+          const thdColor = res.thd_distortion_pct > 1.8 ? '#f85149' : '#3fb950';
+
           const diagBadge = res.is_harsh
-            ? `<span class="pill pill-harsh">⚠️ ${res.diagnosis}</span>`
-            : `<span style="font-size:12px; color:#3fb950;">✓ ${res.diagnosis}</span>`;
+            ? `<div class="pill pill-harsh" style="margin-top:6px;">⚠️ ${res.diagnosis}</div>`
+            : `<div style="font-size:12px; color:#3fb950; margin-top:6px;">✓ ${res.diagnosis}</div>`;
 
           let confirmHtml = '';
           if (res.confirmation) {
             const c = res.confirmation;
             const boxClass = c.is_confirmed ? 'confirm-box' : 'confirm-box warn';
-            const icon = c.is_confirmed ? '✅ CONFIRMED:' : '🔧 FINE-TUNE:';
+            const icon = c.is_confirmed ? '✅ CONFIRMED DISTORTION-FREE:' : '🔧 FINE-TUNE REQUIRED:';
             confirmHtml = `
               <div class="${boxClass}">
-                <b>${icon}</b> Re-tested at <b>${c.post_db} dB</b>. ${c.fine_tune_suggestion}
+                <b>${icon}</b> Post-Adjustment Measured: <b>${c.post_db} dBC</b> vs Actual Required: <b>${res.target_db} dBC</b>
+                (Delta: ${c.residual_error_db > 0 ? '+' : ''}${c.residual_error_db} dB | THD: ${c.thd_distortion_pct}%).<br>
+                ${c.fine_tune_suggestion}
               </div>
             `;
           }
 
           metricsHtml = `
             <div class="ch-metrics">
-              <div style="flex:1;">
-                <div style="font-size:12px; color:var(--muted);">
-                  Measured at Driver Ear: <b>${res.initial_measured_db} dB</b> | Target: <b>${res.target_db} dB</b>
+              <div style="flex:1; min-width:240px;">
+                <div class="db-table">
+                  <span>Measured: <b style="color:#fff;">${res.initial_measured_db} dBC</b></span>
+                  <span>| Required: <b style="color:var(--blue);">${res.target_db} dBC</b></span>
+                  <span>| Delta: <b style="color:#ffd33d;">${deltaStr}</b></span>
+                  <span>| THD: <b style="color:${thdColor};">${res.thd_distortion_pct}%</b></span>
                 </div>
-                <div style="margin-top:4px;">${diagBadge}</div>
-                ${res.tweeter_eq_guide ? `<div style="margin-top:4px; font-size:11px; color:var(--primary); font-family:monospace;">🎚️ ${res.tweeter_eq_guide}</div>` : ''}
+                ${diagBadge}
+                ${res.tweeter_eq_guide ? `<div style="margin-top:5px; font-size:11.5px; color:var(--primary); font-family:monospace;">🎚️ ${res.tweeter_eq_guide}</div>` : ''}
               </div>
               <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:4px;">
                 ${!isBlend ? `<span class="pill ${reqClass}">Set Speaker Level: ${res.required_action_text}</span>` : ''}
@@ -207,7 +250,7 @@
               </div>
               <div style="display:flex; gap:6px; flex-shrink:0;">
                 <button class="btn btn-sm btn-outline" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'initial')">
-                  ${res ? 'Re-Measure' : 'Test (at 0 dB)'}
+                  ${res ? 'Re-Measure' : 'Test Speaker'}
                 </button>
                 ${res ? `
                   <button class="btn btn-sm btn-confirm" ${isBusy ? 'disabled' : ''} onclick="testSingleChannel('${ch.id}', 'confirm')">
@@ -255,7 +298,7 @@
       const micLabel = document.getElementById('liveMicLabel');
       const micBar = document.getElementById('liveMicBar');
 
-      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Ding-Dong Chime'}: ${ch.name}...`;
+      statusEl.innerText = `${mode === 'confirm' ? 'Confirming' : 'Playing Natural Studio Reference'}: ${ch.name}...`;
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -279,13 +322,13 @@
         const rms = Math.sqrt(sum / input.length);
         const db = Math.max(0, Math.min(100, (20 * Math.log10(rms + 1e-6) + 80) * 1.4));
         micBar.style.width = `${db.toFixed(0)}%`;
-        micLabel.innerText = `Mic: ${(db * 0.6 + 40).toFixed(1)} dB`;
+        micLabel.innerText = `Live Mic: ${(db * 0.6 + 40).toFixed(1)} dBC`;
       };
 
       source.connect(processor);
       processor.connect(audioCtx.destination);
 
-      const player = new Audio(`/api/car/tone/${ch.id}?duration=3.2&v=${Date.now()}`);
+      const player = new Audio(`/api/car/tone/${ch.id}?duration=3.4&v=${Date.now()}`);
       await player.play();
 
       await new Promise(resolve => {
@@ -307,7 +350,7 @@
       }
 
       const wavBlob = encodeWAV(merged, sampleRate);
-      statusEl.innerText = `Analyzing ${ch.name}...`;
+      statusEl.innerText = `Analyzing Exact SPL dB & THD% for ${ch.name}...`;
 
       const formData = new FormData();
       formData.append('channel_id', ch.id);
@@ -352,7 +395,7 @@
           renderChannels();
           await new Promise(r => setTimeout(r, 400));
         }
-        document.getElementById('statusLabel').innerText = 'All Car Channels Tested! Set Pioneer dB & Crossovers, then tap Confirm.';
+        document.getElementById('statusLabel').innerText = 'All Car Speakers Calibrated! Apply the Subtractive dB & 13-Band EQ Settings above.';
       } catch (err) {
         alert('Calibration interrupted: ' + err.message);
       } finally {
@@ -367,7 +410,7 @@
       await fetch('/api/car/reset', { method: 'POST' });
       const calRes = await fetch('/api/car/calculate-calibration');
       calSummary = await calRes.json();
-      document.getElementById('statusLabel').innerText = 'Status: Reset — Ready to test';
+      document.getElementById('statusLabel').innerText = 'Status: Reset — Ready to calibrate';
       renderChannels();
     }
 

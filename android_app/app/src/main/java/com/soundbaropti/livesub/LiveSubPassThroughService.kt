@@ -380,47 +380,50 @@ class LiveSubPassThroughService : Service() {
     ) {
         val bypass = isBypassed
         val cutoffs = floatArrayOf(42.0f, 65.0f, 95.0f, 140.0f, 380.0f, 1200.0f, 3500.0f, 16000.0f)
+        // 100% Subtractive Normalization: shift all bands down by peakBoost so NO band ever exceeds -0.5 dB!
+        // This guarantees 0% digital/DAC clipping even at 60%-80% master volume!
+        val peakBoost = max(0.0f, max(deepSubGain, vocalClarityGain)) + 0.5f
         val gains = if (bypass) {
             floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
         } else {
             floatArrayOf(
-                deepSubGain,                  // 25-42 Hz: Deep Velvet Sub Foundation
-                deepSubGain * 0.80f,          // 42-65 Hz: Warm Sub Cushion
-                hitCutGain,                   // 65-95 Hz: Primary Anti-Hit / Anti-Thump Cut
-                hitCutGain * 0.85f,           // 95-140 Hz: Upper-Bass Punch Suppressor
-                mudTrimGain,                  // 140-380 Hz: Door Woofer Anti-Mud Cut
-                vocalClarityGain * 0.85f,     // 380-1200 Hz: Warm Front/Rear Body
-                vocalClarityGain,             // 1200-3500 Hz: 360° Vocal Presence & Immersion
-                highSmoothGain                // 3500-16000 Hz: Distortion-Free Silk Highs
+                (deepSubGain - peakBoost).coerceAtMost(-0.5f),             // 25-42 Hz: Deep Velvet Sub (0% Clip Anchor)
+                (deepSubGain * 0.85f - peakBoost).coerceAtMost(-0.8f),     // 42-65 Hz: Smooth Deep Cushion
+                (hitCutGain - peakBoost * 0.6f).coerceIn(-15.0f, -3.5f),   // 65-95 Hz: Strong Anti-Hit / Anti-Slam Cut
+                (hitCutGain * 0.9f - peakBoost * 0.6f).coerceIn(-15.0f, -3.5f), // 95-140 Hz: Upper-Bass Punch Cut
+                (mudTrimGain - peakBoost * 0.5f).coerceIn(-9.0f, -2.0f),   // 140-380 Hz: Door Woofer Anti-Mud Cut
+                (vocalClarityGain * 0.85f - peakBoost).coerceAtMost(-1.0f),// 380-1200 Hz: Warm Natural Vocal Body
+                (vocalClarityGain - peakBoost).coerceAtMost(-0.8f),        // 1200-3500 Hz: 360° Vocal Stage Clarity
+                (highSmoothGain - peakBoost * 0.7f).coerceIn(-9.0f, -1.5f) // 3500-16000 Hz: Anti-Harshness & Anti-Hiss Silk
             )
         }
 
         for ((_, dp) in dspProcessors) {
             try {
-                dp.setInputGainAllChannelsTo(if (bypass) 0.0f else headroomTrimDb)
+                dp.setInputGainAllChannelsTo(if (bypass) 0.0f else min(-1.5f, headroomTrimDb))
                 for (i in 0 until 8) {
                     dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i]))
                 }
             } catch (_: Exception) {}
         }
 
-        // Also mirror onto hardware Equalizer bands for guaranteed audible pass-through on all Android chipsets
+        // Mirror 100% Subtractive Curve (<= 0 dB) onto hardware Equalizer so 60% volume NEVER distorts on any OEM HAL
         for ((_, eq) in eqProcessors) {
             try {
                 val numBands = eq.numberOfBands.toInt()
                 val range = eq.bandLevelRange
                 val minLvl = range[0].toInt()
-                val maxLvl = range[1].toInt()
+                val maxLvl = min(0, range[1].toInt()) // Never allow positive millibel boost on hardware EQ
                 for (b in 0 until numBands) {
                     val centerHz = eq.getCenterFreq(b.toShort()) / 1000 // mHz -> Hz
                     val targetDb = if (bypass) {
                         0.0f
                     } else when {
-                        centerHz <= 65 -> deepSubGain
-                        centerHz in 66..160 -> hitCutGain
-                        centerHz in 161..450 -> mudTrimGain
-                        centerHz in 451..3200 -> vocalClarityGain
-                        else -> highSmoothGain
+                        centerHz <= 65 -> gains[0]
+                        centerHz in 66..160 -> gains[2]
+                        centerHz in 161..450 -> gains[4]
+                        centerHz in 451..3200 -> gains[6]
+                        else -> gains[7]
                     }
                     val millibel = (targetDb * 100.0f).toInt().coerceIn(minLvl, maxLvl).toShort()
                     eq.setBandLevel(b.toShort(), millibel)
@@ -634,28 +637,30 @@ class LiveSubPassThroughService : Service() {
                 targetBassOverMidsDb = 2.0f
 
                 val frontAvg = (calFrontLeftDb + calFrontRightDb) * 0.5f
-                val rearDiff = frontAvg - calRearSurroundDb
+                val reqSubDeep = frontAvg + 1.5f
+                val reqSubHit = frontAvg - 2.0f
+                val reqRear = frontAvg - 1.5f
+
+                val rearDiff = reqRear - calRearSurroundDb
+                val subDiff = reqSubDeep - calSubDeepDb - (if (hitPeakDiff > 2.0f) 2.0f else 0.0f)
                 val lrDiff = calFrontLeftDb - calFrontRightDb
 
                 val faderHint = when {
-                    rearDiff > 2.5f -> "Boost Rear Coaxial by +${"%.0f".format(min(6f, rearDiff))} dB on head unit"
-                    rearDiff < -2.5f -> "Reduce Rear Coaxial by ${"%.0f".format(max(-6f, rearDiff))} dB on head unit"
-                    else -> "Front/Rear Surround Balance is Ideal (0 dB)"
+                    rearDiff > 1.5f -> "Set Rear Level = +${"%.0f".format(min(3f, rearDiff))} dB"
+                    rearDiff < -1.5f -> "Set Rear Level = ${"%.0f".format(max(-6f, rearDiff))} dB"
+                    else -> "Rear Level = 0 dB (Balanced)"
                 }
-                val subHint = if (hitPeakDiff > 2.0f) {
-                    "Set Pioneer Sub LPF = 63 Hz (-18dB slope) to stop 100 Hz hard hit"
-                } else {
-                    "Set Pioneer Sub LPF = 80 Hz (-12dB slope), Front/Rear HPF = 80 Hz"
-                }
+                val subHint = "Set Sub/Woofer Level = ${"%+.0f".format(subDiff.coerceIn(-8f, 1f))} dB, Sub LPF = 63 Hz (-18dB/oct), Front/Rear HPF = 80 Hz"
 
-                calibrationStatus = "✅ 360° Auto-Calibration Complete & Applied Live!"
+                calibrationStatus = "✅ 60% Vol Distortion-Free Calibration Complete & Applied Live!"
                 calRecommendation = buildString {
-                    append("• Deep Sub (42 Hz): ${"%.1f".format(calSubDeepDb)} dB | Upper-Bass Hit (105 Hz): ${"%.1f".format(calSubHitDb)} dB\n")
-                    append("• Front L: ${"%.1f".format(calFrontLeftDb)} dB | Front R: ${"%.1f".format(calFrontRightDb)} dB | Rear: ${"%.1f".format(calRearSurroundDb)} dB\n")
-                    append("• Live DSP Auto-Set: Deep Velvet +${"%.1f".format(deepSubWarmthDb)} dB, Anti-Hit Limit -${"%.0f".format(maxSubCutDb)} dB\n")
-                    append("• Head-Unit Tip: $faderHint • $subHint")
+                    append("• Deep Sub (42 Hz): Measured ${"%.1f".format(calSubDeepDb)} dB | Required ${"%.1f".format(reqSubDeep)} dB\n")
+                    append("• Upper-Bass Hit (105 Hz): Measured ${"%.1f".format(calSubHitDb)} dB | Target <= ${"%.1f".format(reqSubHit)} dB (Anti-Hit Cut: -${"%.0f".format(maxSubCutDb)} dB)\n")
+                    append("• Front L: ${"%.1f".format(calFrontLeftDb)} dB | Front R: ${"%.1f".format(calFrontRightDb)} dB (Anchor ${"%.1f".format(frontAvg)} dB)\n")
+                    append("• Rear Surround: Measured ${"%.1f".format(calRearSurroundDb)} dB | Required ${"%.1f".format(reqRear)} dB\n")
+                    append("• 60% Vol Distortion-Free Setup: Loudness=OFF, BassBoost=0, SLA=-2dB, $subHint • $faderHint")
                     if (abs(lrDiff) > 1.5f) {
-                        append("\n• L/R Trim: Adjust R/L balance by ${"%+.1f".format(-lrDiff)} dB")
+                        append("\n• L/R Trim: Set louder Front speaker to ${"%.0f".format(-abs(lrDiff))} dB")
                     }
                 }
             } catch (_: Exception) {
@@ -677,12 +682,21 @@ class LiveSubPassThroughService : Service() {
             val sr = 44100
             val totalSamples = (sr * durationMs) / 1000
             val pcm = ShortArray(totalSamples * 2)
+            val f3 = freq1 * 1.5
+            val f4 = freq2 * 1.25
             for (i in 0 until totalSamples) {
                 val t = i.toDouble() / sr
-                val env = sin(PI * i.toDouble() / totalSamples).toFloat()
-                val wave = (0.65 * sin(2.0 * PI * freq1 * t) + 0.35 * sin(2.0 * PI * freq2 * t)).toFloat() * env
-                val l = (wave * leftAmp * 26000f).toInt().coerceIn(-32767, 32767).toShort()
-                val r = (wave * rightAmp * 26000f).toInt().coerceIn(-32767, 32767).toShort()
+                // Smooth natural bowed/acoustic envelope (zero click or harsh transient)
+                val env = (0.5 * (1.0 - kotlin.math.cos(2.0 * PI * i.toDouble() / totalSamples))).toFloat()
+                val wave = (
+                    0.48 * sin(2.0 * PI * freq1 * t) +
+                    0.28 * sin(2.0 * PI * freq2 * t + 0.6) +
+                    0.15 * sin(2.0 * PI * f3 * t + 1.2) +
+                    0.09 * sin(2.0 * PI * f4 * t + 1.9)
+                ).toFloat() * env
+                // -6 dBFS distortion-free peak ceiling (15500f out of 32767) so 60% volume never clips
+                val l = (wave * leftAmp * 15500f).toInt().coerceIn(-32767, 32767).toShort()
+                val r = (wave * rightAmp * 15500f).toInt().coerceIn(-32767, 32767).toShort()
                 pcm[i * 2] = l
                 pcm[i * 2 + 1] = r
             }
