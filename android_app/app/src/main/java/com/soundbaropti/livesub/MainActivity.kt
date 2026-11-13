@@ -57,6 +57,22 @@ class MainActivity : Activity() {
     private lateinit var calStatusText: TextView
     private lateinit var calReportText: TextView
 
+    // Poweramp-Style 10-Band EQ, Tone & Limiter UI
+    private lateinit var optimizeSpotifyBtn: Button
+    private lateinit var spotifyOptStatusText: TextView
+    private lateinit var autoEqToggleBtn: Button
+    private lateinit var limiterToggleBtn: Button
+    private lateinit var toneBassLabel: TextView
+    private lateinit var toneBassSeek: SeekBar
+    private lateinit var toneTrebleLabel: TextView
+    private lateinit var toneTrebleSeek: SeekBar
+    private lateinit var preampLabel: TextView
+    private lateinit var preampSeek: SeekBar
+    private lateinit var limiterCeilingLabel: TextView
+    private lateinit var limiterCeilingSeek: SeekBar
+    private val eqBandLabels = mutableListOf<TextView>()
+    private val eqBandSeeks = mutableListOf<SeekBar>()
+
     // Sliders
     private lateinit var deepWarmthLabel: TextView
     private lateinit var threshValueLabel: TextView
@@ -126,6 +142,21 @@ class MainActivity : Activity() {
         }
         val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
             action = LiveSubPassThroughService.ACTION_RUN_SWEEP
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun triggerSpotifyOptimize() {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            requestNeededPermissions()
+            return
+        }
+        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_OPTIMIZE_MUSIC
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             startForegroundService(intent)
@@ -266,6 +297,37 @@ class MainActivity : Activity() {
             "⏳ MEASURING FRONT, REAR & SUB SPEAKERS..."
         } else {
             "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"
+        }
+
+        // Poweramp-Style Spotify Auto-Optimizer & 10-Band EQ Live Refresh
+        spotifyOptStatusText.text = LiveSubPassThroughService.musicOptStatus
+        optimizeSpotifyBtn.isEnabled = !LiveSubPassThroughService.isOptimizingMusic
+        optimizeSpotifyBtn.text = if (LiveSubPassThroughService.isOptimizingMusic) {
+            "⏳ MEASURING PLAYING SPOTIFY AUDIO..."
+        } else {
+            "🎧 MEASURE & OPTIMIZE PLAYING SPOTIFY SONG (AUTO-EQ)"
+        }
+
+        val autoOn = LiveSubPassThroughService.autoPowerampOptimize
+        autoEqToggleBtn.text = if (autoOn) "🤖 LIVE AUTO-EQ: ON (Mic + Manual)" else "🎛️ LIVE AUTO-EQ: OFF (Manual Only)"
+        autoEqToggleBtn.background = roundedBg(if (autoOn) "#3FB950" else "#21262D", "#3FB950")
+        autoEqToggleBtn.setTextColor(if (autoOn) Color.BLACK else Color.WHITE)
+
+        val limOn = LiveSubPassThroughService.limiterEnabled
+        limiterToggleBtn.text = if (limOn) "🛡️ LIMITER: ON (Clip-Free)" else "⚠️ LIMITER: OFF"
+        limiterToggleBtn.background = roundedBg(if (limOn) "#58A6FF" else "#21262D", "#58A6FF")
+        limiterToggleBtn.setTextColor(if (limOn) Color.BLACK else Color.WHITE)
+
+        toneBassLabel.text = "Bass Tone (31–62 Hz Deep Sub): %+.1f dB".format(LiveSubPassThroughService.toneBassDb)
+        toneTrebleLabel.text = "Treble Tone (8–16 kHz Silk Air): %+.1f dB".format(LiveSubPassThroughService.toneTrebleDb)
+        preampLabel.text = "Pre-Amp Headroom (Anti-Clip): %.1f dB".format(LiveSubPassThroughService.preampDb)
+        limiterCeilingLabel.text = "Limiter Ceiling: %.1f dBFS".format(LiveSubPassThroughService.limiterCeilingDb)
+
+        for (i in 0 until eqBandLabels.size) {
+            val labelName = LiveSubPassThroughService.EQ_LABELS[i]
+            val userVal = LiveSubPassThroughService.userEqOffsetsDb[i]
+            val liveVal = LiveSubPassThroughService.liveAppliedEqDb[i]
+            eqBandLabels[i].text = "%-6s | User: %+.1f dB  (Live DSP: %+.1f dB)".format(labelName, userVal, liveVal)
         }
     }
 
@@ -693,6 +755,237 @@ class MainActivity : Activity() {
         }
         calCard.addView(calReportText)
         root.addView(calCard)
+
+        // =========================================================================
+        // CARD 4B: POWERAMP-STYLE 10-BAND PASS-THROUGH EQ, TONE & LIMITER FOR SPOTIFY
+        // =========================================================================
+        val powerampCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+
+        val paHeader = TextView(this).apply {
+            text = "🎛️ POWERAMP-STYLE SPOTIFY PASS-THROUGH EQ, TONE & LIMITER"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+        }
+        powerampCard.addView(paHeader)
+
+        val paDesc = TextView(this).apply {
+            text = "Fine-tune Spotify / YouTube Music live with a 10-Band EQ, Bass/Treble Tone, Pre-Amp Headroom & Anti-Clip Limiter for crystal-clear vocals + deep distortion-free bass."
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 4, 0, 12)
+        }
+        powerampCard.addView(paDesc)
+
+        optimizeSpotifyBtn = Button(this).apply {
+            text = "🎧 MEASURE & OPTIMIZE PLAYING SPOTIFY SONG (AUTO-EQ)"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#3FB950")
+            setTextColor(Color.BLACK)
+            setPadding(18, 22, 18, 22)
+            setOnClickListener { triggerSpotifyOptimize() }
+        }
+        powerampCard.addView(optimizeSpotifyBtn)
+
+        spotifyOptStatusText = TextView(this).apply {
+            text = LiveSubPassThroughService.musicOptStatus
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 10, 0, 14)
+        }
+        powerampCard.addView(spotifyOptStatusText)
+
+        // Toggle Row: Live Auto-EQ ON/OFF + Limiter ON/OFF
+        val paToggleRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 2f
+        }
+        val paHalfLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(6, 0, 6, 14)
+        }
+        autoEqToggleBtn = Button(this).apply {
+            text = "🤖 LIVE AUTO-EQ: ON"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = paHalfLp
+            setOnClickListener {
+                LiveSubPassThroughService.autoPowerampOptimize = !LiveSubPassThroughService.autoPowerampOptimize
+                refreshMeters()
+            }
+        }
+        limiterToggleBtn = Button(this).apply {
+            text = "🛡️ LIMITER: ON"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = paHalfLp
+            setOnClickListener {
+                LiveSubPassThroughService.limiterEnabled = !LiveSubPassThroughService.limiterEnabled
+                refreshMeters()
+            }
+        }
+        paToggleRow.addView(autoEqToggleBtn)
+        paToggleRow.addView(limiterToggleBtn)
+        powerampCard.addView(paToggleRow)
+
+        // Tone & Limiter Sliders
+        toneBassLabel = TextView(this).apply {
+            text = "Bass Tone (31–62 Hz Deep Sub): +2.5 dB"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+        }
+        powerampCard.addView(toneBassLabel)
+        toneBassSeek = SeekBar(this).apply {
+            max = 24 // -6.0 to +6.0 dB in 0.5 steps
+            progress = 17
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        LiveSubPassThroughService.toneBassDb = (p - 12) * 0.5f
+                    }
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        powerampCard.addView(toneBassSeek)
+
+        toneTrebleLabel = TextView(this).apply {
+            text = "Treble Tone (8–16 kHz Silk Air): +0.0 dB"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setPadding(0, 12, 0, 0)
+        }
+        powerampCard.addView(toneTrebleLabel)
+        toneTrebleSeek = SeekBar(this).apply {
+            max = 24
+            progress = 12
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        LiveSubPassThroughService.toneTrebleDb = (p - 12) * 0.5f
+                    }
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        powerampCard.addView(toneTrebleSeek)
+
+        preampLabel = TextView(this).apply {
+            text = "Pre-Amp Headroom (Anti-Clip): -2.0 dB"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setPadding(0, 12, 0, 0)
+        }
+        powerampCard.addView(preampLabel)
+        preampSeek = SeekBar(this).apply {
+            max = 16 // -8.0 to 0.0 dB in 0.5 steps
+            progress = 12
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        LiveSubPassThroughService.preampDb = (p - 16) * 0.5f
+                    }
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        powerampCard.addView(preampSeek)
+
+        limiterCeilingLabel = TextView(this).apply {
+            text = "Limiter Ceiling: -1.2 dBFS"
+            textSize = 12f
+            setTextColor(Color.WHITE)
+            setPadding(0, 12, 0, 0)
+        }
+        powerampCard.addView(limiterCeilingLabel)
+        limiterCeilingSeek = SeekBar(this).apply {
+            max = 27 // -3.0 to -0.3 dBFS in 0.1 steps
+            progress = 18
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) {
+                        LiveSubPassThroughService.limiterCeilingDb = -3.0f + (p * 0.1f)
+                    }
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        powerampCard.addView(limiterCeilingSeek)
+
+        val eqSectionTitle = TextView(this).apply {
+            text = "10-BAND GRAPHIC / PARAMETRIC EQUALIZER (-10 to +6 dB)"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 20, 0, 8)
+        }
+        powerampCard.addView(eqSectionTitle)
+
+        eqBandLabels.clear()
+        eqBandSeeks.clear()
+        for (idx in 0 until 10) {
+            val lbl = TextView(this).apply {
+                text = "%-6s | User: %+.1f dB".format(
+                    LiveSubPassThroughService.EQ_LABELS[idx],
+                    LiveSubPassThroughService.userEqOffsetsDb[idx]
+                )
+                textSize = 11.5f
+                setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
+                setTextColor(Color.parseColor("#C9D1D9"))
+                setPadding(0, 8, 0, 0)
+            }
+            val sb = SeekBar(this).apply {
+                max = 32 // -10.0 to +6.0 dB in 0.5 dB steps
+                progress = ((LiveSubPassThroughService.userEqOffsetsDb[idx] + 10.0f) * 2.0f).toInt().coerceIn(0, 32)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                        if (fromUser) {
+                            LiveSubPassThroughService.userEqOffsetsDb[idx] = -10.0f + (p * 0.5f)
+                        }
+                    }
+                    override fun onStartTrackingTouch(s: SeekBar?) {}
+                    override fun onStopTrackingTouch(s: SeekBar?) {}
+                })
+            }
+            eqBandLabels.add(lbl)
+            eqBandSeeks.add(sb)
+            powerampCard.addView(lbl)
+            powerampCard.addView(sb)
+        }
+
+        val resetPaBtn = Button(this).apply {
+            text = "↺ Reset to Crystal Clear Vocals + Deep Bass Preset"
+            textSize = 12f
+            background = roundedBg("#21262D", "#58A6FF")
+            setTextColor(Color.parseColor("#58A6FF"))
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 16 }
+            layoutParams = lp
+            setOnClickListener {
+                LiveSubPassThroughService.resetPowerampCrystalBassPreset()
+                toneBassSeek.progress = 17
+                toneTrebleSeek.progress = 12
+                preampSeek.progress = 12
+                limiterCeilingSeek.progress = 18
+                for (i in 0 until 10) {
+                    eqBandSeeks[i].progress = ((LiveSubPassThroughService.userEqOffsetsDb[i] + 10.0f) * 2.0f).toInt().coerceIn(0, 32)
+                }
+                refreshMeters()
+            }
+        }
+        powerampCard.addView(resetPaBtn)
+        root.addView(powerampCard)
 
         // =========================================================================
         // CARD 5: FINE-TUNE 360° SOUND & DEEP VELVET SUB SLIDERS

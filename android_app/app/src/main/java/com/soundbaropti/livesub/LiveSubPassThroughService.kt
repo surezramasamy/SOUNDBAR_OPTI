@@ -39,14 +39,48 @@ class LiveSubPassThroughService : Service() {
         const val ACTION_ATTACH_SESSION = "com.soundbaropti.livesub.ACTION_ATTACH_SESSION"
         const val ACTION_DETACH_SESSION = "com.soundbaropti.livesub.ACTION_DETACH_SESSION"
         const val ACTION_RUN_SWEEP = "com.soundbaropti.livesub.ACTION_RUN_SWEEP"
+        const val ACTION_OPTIMIZE_MUSIC = "com.soundbaropti.livesub.ACTION_OPTIMIZE_MUSIC"
         const val EXTRA_SESSION_ID = "extra_session_id"
         const val EXTRA_PACKAGE_NAME = "extra_package_name"
 
         @Volatile var isRunning = false
         @Volatile var isBypassed = false
         @Volatile var isCalibrating = false
+        @Volatile var isOptimizingMusic = false
         @Volatile var calibrationProgress = 0
         @Volatile var calibrationStatus = "Ready — Tap to auto-measure Front, Rear & Subwoofer"
+        @Volatile var musicOptStatus = "Tap 'Measure & Optimize Playing Spotify Song' while music plays"
+
+        // Poweramp-Style 10-Band Equalizer (31, 62, 125, 250, 500, 1k, 2k, 4k, 8k, 16k Hz)
+        val EQ_LABELS = arrayOf("31 Hz", "62 Hz", "125 Hz", "250 Hz", "500 Hz", "1 kHz", "2 kHz", "4 kHz", "8 kHz", "16 kHz")
+        val EQ_CUTOFFS = floatArrayOf(38.0f, 75.0f, 150.0f, 300.0f, 650.0f, 1300.0f, 2600.0f, 5200.0f, 10500.0f, 18000.0f)
+        // User manual fine-tuning offsets per band (-10 to +6 dB)
+        val userEqOffsetsDb = floatArrayOf(1.5f, 1.0f, -3.5f, -2.0f, 0.0f, 0.5f, 1.5f, -1.5f, -1.0f, 1.0f)
+        // Final combined live applied gains per band (witnessed on UI)
+        val liveAppliedEqDb = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
+
+        // Poweramp-Style Tone & Limiter Controls
+        @Volatile var autoPowerampOptimize = true  // Live mic continuously refines EQ for crystal vocals + deep bass
+        @Volatile var toneBassDb = 2.5f            // -6 to +6 dB Deep Sub Tone (31-62 Hz)
+        @Volatile var toneTrebleDb = 0.0f          // -6 to +6 dB Silk Air Tone (8-16 kHz)
+        @Volatile var preampDb = -2.0f             // -8 to 0 dB Headroom Pre-Amp
+        @Volatile var limiterEnabled = true
+        @Volatile var limiterCeilingDb = -1.2f     // -3.0 to -0.3 dBFS Anti-Clip Ceiling
+
+        fun resetPowerampCrystalBassPreset() {
+            val preset = floatArrayOf(1.5f, 1.0f, -3.5f, -2.0f, 0.0f, 0.5f, 1.5f, -1.5f, -1.0f, 1.0f)
+            for (i in 0 until 10) userEqOffsetsDb[i] = preset[i]
+            toneBassDb = 2.5f
+            toneTrebleDb = 0.0f
+            preampDb = -2.0f
+            limiterCeilingDb = -1.2f
+            limiterEnabled = true
+            deepSubWarmthDb = 4.5f
+            targetBassOverMidsDb = 2.5f
+            maxSubCutDb = 12.0f
+            surroundClarityDb = 2.5f
+            tweeterSmoothDb = 2.5f
+        }
 
         // User-controllable 360° Premium Sound Tuning Targets
         @Volatile var soundProfile = "DEEP_VELVET" // DEEP_VELVET, SURROUND_360, PURE_VOCAL, LOUDNESS_RICH
@@ -207,6 +241,12 @@ class LiveSubPassThroughService : Service() {
                 }
                 runAutoSpeakerCalibrationSweep()
             }
+            ACTION_OPTIMIZE_MUSIC -> {
+                if (!isRunning) {
+                    startEngine()
+                }
+                runLiveSpotifyOptimizer()
+            }
             else -> {
                 if (!isRunning) {
                     startEngine()
@@ -296,45 +336,42 @@ class LiveSubPassThroughService : Service() {
     private fun attachDspToSession(sessionId: Int) {
         if (!dspProcessors.containsKey(sessionId)) {
             try {
-                // 8-Band High-Resolution Pre-EQ + 8-Band MBC + Post-EQ + Distortion-Free Limiter
+                // Poweramp-Grade 10-Band High-Resolution Pre-EQ + 10-Band MBC + Post-EQ + Anti-Clip Limiter
                 val config = DynamicsProcessing.Config.Builder(
                     DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
                     2,
-                    true, 8,
-                    true, 8,
-                    true, 8,
+                    true, 10,
+                    true, 10,
+                    true, 10,
                     true
                 ).build()
 
-                // Configure distortion-free soft limiter so loud bass or highs NEVER clip
                 val limiter = DynamicsProcessing.Limiter(
-                    true, true, 0,
-                    2.0f,   // 2 ms fast attack
-                    60.0f,  // 60 ms smooth release
-                    4.0f,   // 4:1 ratio
-                    -1.2f,  // -1.2 dBFS ceiling prevents any digital/amp clipping
+                    true, limiterEnabled, 0,
+                    1.5f,              // 1.5 ms ultra-fast transient protection
+                    65.0f,             // 65 ms smooth release
+                    5.0f,              // 5:1 anti-clip ratio
+                    limiterCeilingDb,  // User-controllable ceiling (-1.2 dBFS default)
                     0.0f
                 )
 
                 val dp = DynamicsProcessing(100, sessionId, config)
                 dp.setLimiterAllChannelsTo(limiter)
 
-                // Band cutoff frequencies covering Deep Sub, Upper-Bass Hit Zone, Door Mid-Woofer, Front/Rear Vocals, and Tweeters
-                val cutoffs = floatArrayOf(42.0f, 65.0f, 95.0f, 140.0f, 380.0f, 1200.0f, 3500.0f, 16000.0f)
-                for (i in 0 until 8) {
-                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], 0.0f))
-                    dp.setPostEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], 0.0f))
+                for (i in 0 until 10) {
+                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, EQ_CUTOFFS[i], 0.0f))
+                    dp.setPostEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, EQ_CUTOFFS[i], 0.0f))
 
-                    // Multi-Band Compressor (MBC) — specifically tightens 65-140 Hz upper-bass so it NEVER hits hard
+                    // Multi-Band Compressor (MBC) — tightens 125 Hz upper-bass hit & prevents 4 kHz harshness
                     val isHitBand = (i == 2 || i == 3)
                     val mbcBand = DynamicsProcessing.MbcBand(
                         true,
-                        cutoffs[i],
-                        if (isHitBand) 4.0f else 12.0f,   // Fast 4ms attack on 65-140 Hz hard-hit band
+                        EQ_CUTOFFS[i],
+                        if (isHitBand) 4.0f else 12.0f,
                         if (isHitBand) 110.0f else 150.0f,
-                        if (isHitBand) 4.5f else 2.0f,    // Strong 4.5:1 compression on upper-bass punch
+                        if (isHitBand) 4.5f else 2.0f,
                         if (isHitBand) -18.0f else -10.0f,
-                        6.0f,                             // Soft 6 dB knee for velvet smoothness
+                        6.0f,
                         -60.0f,
                         1.0f,
                         0.0f,
@@ -363,12 +400,9 @@ class LiveSubPassThroughService : Service() {
     }
 
     /**
-     * Applies 360° All-Direction Premium Tuning in real time:
-     * - Band 0 (<=42 Hz) & Band 1 (42-65 Hz): Deep Velvet Background Sub-Bass warmth (+dB)
-     * - Band 2 (65-95 Hz) & Band 3 (95-140 Hz): Anti-Hit / Anti-Slam Suppressor (-dB) so bass never hits
-     * - Band 4 (140-380 Hz): Anti-Boxiness Door Woofer cleanup (-dB)
-     * - Band 5 (380-1200 Hz) & Band 6 (1200-3500 Hz): Front & Rear 360° Vocal Stage clarity (+dB)
-     * - Band 7 (3500-16000 Hz): Tweeter De-Harshing & Silk Air
+     * Poweramp-Style 10-Band Equalizer + Tone (Bass/Treble) + Headroom Pre-Amp + Limiter:
+     * Combines User 10-Band Sliders + Tone Knobs + Live Auto-Optimizer (if enabled),
+     * then normalizes subtractively so NO band clips even at 60%-80% master volume!
      */
     private fun apply360TuningToAllSessions(
         deepSubGain: Float,
@@ -379,30 +413,70 @@ class LiveSubPassThroughService : Service() {
         headroomTrimDb: Float
     ) {
         val bypass = isBypassed
-        val cutoffs = floatArrayOf(42.0f, 65.0f, 95.0f, 140.0f, 380.0f, 1200.0f, 3500.0f, 16000.0f)
-        // 100% Subtractive Normalization: shift all bands down by peakBoost so NO band ever exceeds -0.5 dB!
-        // This guarantees 0% digital/DAC clipping even at 60%-80% master volume!
-        val peakBoost = max(0.0f, max(deepSubGain, vocalClarityGain)) + 0.5f
-        val gains = if (bypass) {
-            floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f)
-        } else {
-            floatArrayOf(
-                (deepSubGain - peakBoost).coerceAtMost(-0.5f),             // 25-42 Hz: Deep Velvet Sub (0% Clip Anchor)
-                (deepSubGain * 0.85f - peakBoost).coerceAtMost(-0.8f),     // 42-65 Hz: Smooth Deep Cushion
-                (hitCutGain - peakBoost * 0.6f).coerceIn(-15.0f, -3.5f),   // 65-95 Hz: Strong Anti-Hit / Anti-Slam Cut
-                (hitCutGain * 0.9f - peakBoost * 0.6f).coerceIn(-15.0f, -3.5f), // 95-140 Hz: Upper-Bass Punch Cut
-                (mudTrimGain - peakBoost * 0.5f).coerceIn(-9.0f, -2.0f),   // 140-380 Hz: Door Woofer Anti-Mud Cut
-                (vocalClarityGain * 0.85f - peakBoost).coerceAtMost(-1.0f),// 380-1200 Hz: Warm Natural Vocal Body
-                (vocalClarityGain - peakBoost).coerceAtMost(-0.8f),        // 1200-3500 Hz: 360° Vocal Stage Clarity
-                (highSmoothGain - peakBoost * 0.7f).coerceIn(-9.0f, -1.5f) // 3500-16000 Hz: Anti-Harshness & Anti-Hiss Silk
+        val rawGains = FloatArray(10)
+
+        if (!bypass) {
+            // Auto-EQ contribution per band (if Live Auto-Optimize is ON)
+            val autoBand = if (autoPowerampOptimize) {
+                floatArrayOf(
+                    deepSubGain * 0.55f,      // 31 Hz: Deep Sub Cushion
+                    deepSubGain * 0.45f,      // 62 Hz: Warm Sub Foundation
+                    hitCutGain * 0.70f,       // 125 Hz: Anti-Hit / Anti-Slam Suppressor
+                    mudTrimGain * 0.70f,      // 250 Hz: Door Boxiness / Mud Cut
+                    vocalClarityGain * 0.25f, // 500 Hz: Warm Lower Vocal Body
+                    vocalClarityGain * 0.45f, // 1 kHz: Crystal Vocal Core
+                    vocalClarityGain * 0.55f, // 2 kHz: Vocal Presence & Articulation
+                    highSmoothGain * 0.50f,   // 4 kHz: Anti-Harshness / Sibilance Control
+                    highSmoothGain * 0.35f,   // 8 kHz: Silk Detail
+                    0.5f                      // 16 kHz: Gentle Air
+                )
+            } else {
+                FloatArray(10) { 0.0f }
+            }
+
+            // Tone controls (Poweramp Bass & Treble)
+            val toneBand = floatArrayOf(
+                toneBassDb * 0.90f,  // 31 Hz
+                toneBassDb * 0.75f,  // 62 Hz
+                toneBassDb * 0.15f,  // 125 Hz (minimal upper-bass so Bass Tone stays deep, not boomy!)
+                0.0f, 0.0f, 0.0f, 0.0f,
+                toneTrebleDb * 0.25f,// 4 kHz
+                toneTrebleDb * 0.70f,// 8 kHz
+                toneTrebleDb * 0.90f // 16 kHz
             )
+
+            var maxBand = -20.0f
+            for (i in 0 until 10) {
+                rawGains[i] = (userEqOffsetsDb[i] + autoBand[i] + toneBand[i]).coerceIn(-14.0f, 10.0f)
+                if (rawGains[i] > maxBand) maxBand = rawGains[i]
+            }
+
+            // Subtractive Headroom Shift: keep peak band <= -0.3 dB so Spotify NEVER distorts
+            val shiftDown = max(0.0f, maxBand + 0.3f)
+            for (i in 0 until 10) {
+                rawGains[i] = (rawGains[i] - shiftDown).coerceIn(-15.0f, -0.3f)
+                liveAppliedEqDb[i] = rawGains[i]
+            }
+        } else {
+            for (i in 0 until 10) {
+                rawGains[i] = 0.0f
+                liveAppliedEqDb[i] = 0.0f
+            }
         }
+
+        val activePreamp = if (bypass) 0.0f else min(preampDb, headroomTrimDb)
+        val activeLimiter = DynamicsProcessing.Limiter(
+            true, !bypass && limiterEnabled, 0,
+            1.5f, 65.0f, 5.0f,
+            limiterCeilingDb, 0.0f
+        )
 
         for ((_, dp) in dspProcessors) {
             try {
-                dp.setInputGainAllChannelsTo(if (bypass) 0.0f else min(-1.5f, headroomTrimDb))
-                for (i in 0 until 8) {
-                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, cutoffs[i], gains[i]))
+                dp.setInputGainAllChannelsTo(activePreamp)
+                dp.setLimiterAllChannelsTo(activeLimiter)
+                for (i in 0 until 10) {
+                    dp.setPreEqBandAllChannelsTo(i, DynamicsProcessing.EqBand(true, EQ_CUTOFFS[i], rawGains[i]))
                 }
             } catch (_: Exception) {}
         }
@@ -413,17 +487,22 @@ class LiveSubPassThroughService : Service() {
                 val numBands = eq.numberOfBands.toInt()
                 val range = eq.bandLevelRange
                 val minLvl = range[0].toInt()
-                val maxLvl = min(0, range[1].toInt()) // Never allow positive millibel boost on hardware EQ
+                val maxLvl = min(0, range[1].toInt())
                 for (b in 0 until numBands) {
-                    val centerHz = eq.getCenterFreq(b.toShort()) / 1000 // mHz -> Hz
+                    val centerHz = eq.getCenterFreq(b.toShort()) / 1000
                     val targetDb = if (bypass) {
                         0.0f
                     } else when {
-                        centerHz <= 65 -> gains[0]
-                        centerHz in 66..160 -> gains[2]
-                        centerHz in 161..450 -> gains[4]
-                        centerHz in 451..3200 -> gains[6]
-                        else -> gains[7]
+                        centerHz <= 45 -> rawGains[0]
+                        centerHz in 46..90 -> rawGains[1]
+                        centerHz in 91..180 -> rawGains[2]
+                        centerHz in 181..360 -> rawGains[3]
+                        centerHz in 361..750 -> rawGains[4]
+                        centerHz in 751..1500 -> rawGains[5]
+                        centerHz in 1501..3000 -> rawGains[6]
+                        centerHz in 3001..6000 -> rawGains[7]
+                        centerHz in 6001..12000 -> rawGains[8]
+                        else -> rawGains[9]
                     }
                     val millibel = (targetDb * 100.0f).toInt().coerceIn(minLvl, maxLvl).toShort()
                     eq.setBandLevel(b.toShort(), millibel)
@@ -667,6 +746,80 @@ class LiveSubPassThroughService : Service() {
                 calibrationStatus = "Calibration finished."
             } finally {
                 isCalibrating = false
+            }
+        }
+    }
+
+    /**
+     * Poweramp-Style Live Spotify / YouTube Music Pass-Through Optimizer:
+     * Listens to the currently playing song for 4.5 seconds via microphone, measures all 5 frequency zones
+     * (Deep Sub, Upper-Bass Hit, Boxy Mud, Vocals, Tweeter Harshness & THD), and automatically sets
+     * the 10-Band Equalizer + Tone + Limiter for crystal-clear vocals and deep distortion-free bass.
+     */
+    private fun runLiveSpotifyOptimizer() {
+        if (isOptimizingMusic) return
+        isOptimizingMusic = true
+        thread(start = true, name = "SpotifyLiveOptThread") {
+            try {
+                var sumDeep = 0f
+                var sumHit = 0f
+                var sumMud = 0f
+                var sumMid = 0f
+                var sumHigh = 0f
+                var maxThd = 0f
+                val samples = 36
+                for (i in 1..samples) {
+                    val pct = (i * 100) / samples
+                    musicOptStatus = "🎧 Measuring playing Spotify / music audio ($pct%)..."
+                    sumDeep += liveDeepSubDb
+                    sumHit += liveSubDb
+                    sumMud += liveLowMidDb
+                    sumMid += liveMidDb
+                    sumHigh += liveHighDb
+                    if (liveDistortionPct > maxThd) maxThd = liveDistortionPct
+                    Thread.sleep(125L)
+                }
+
+                val avgDeep = sumDeep / samples
+                val avgHit = sumHit / samples
+                val avgMud = sumMud / samples
+                val avgMid = sumMid / samples
+                val avgHigh = sumHigh / samples
+
+                // Compute optimal Poweramp 10-Band EQ curve for Crystal Clear Vocals + Deep Velvet Bass (0% Distortion)
+                val hitExcess = max(0f, avgHit - avgMid)
+                val mudExcess = max(0f, avgMud - avgMid)
+                val highExcess = max(0f, avgHigh - avgMid + 2.0f)
+                val deepDeficit = (avgMid - avgDeep).coerceIn(-3.0f, 4.0f)
+
+                userEqOffsetsDb[0] = (1.5f + deepDeficit * 0.5f).coerceIn(-1.0f, 3.5f) // 31 Hz Deep Velvet
+                userEqOffsetsDb[1] = (1.0f + deepDeficit * 0.35f).coerceIn(-1.0f, 2.5f)// 62 Hz Warm Foundation
+                userEqOffsetsDb[2] = (-3.0f - hitExcess * 0.6f).coerceIn(-8.0f, -2.0f) // 125 Hz Anti-Hit Cut
+                userEqOffsetsDb[3] = (-2.0f - mudExcess * 0.5f).coerceIn(-6.0f, -1.0f) // 250 Hz Anti-Mud Cut
+                userEqOffsetsDb[4] = 0.0f                                              // 500 Hz Natural Body
+                userEqOffsetsDb[5] = 1.0f                                              // 1 kHz Crystal Vocal Core
+                userEqOffsetsDb[6] = 2.0f                                              // 2 kHz Vocal Articulation
+                userEqOffsetsDb[7] = (-1.5f - highExcess * 0.45f).coerceIn(-5.0f, 0.0f)// 4 kHz Anti-Harshness
+                userEqOffsetsDb[8] = (-1.0f - highExcess * 0.35f).coerceIn(-4.0f, 0.5f)// 8 kHz Silk Detail
+                userEqOffsetsDb[9] = 1.0f                                              // 16 kHz Air
+
+                toneBassDb = (2.0f + deepDeficit * 0.4f).coerceIn(0.5f, 4.0f)
+                toneTrebleDb = if (highExcess > 2.0f) -1.0f else 0.5f
+                preampDb = if (maxThd > 1.5f) -3.5f else -2.0f
+                limiterCeilingDb = if (maxThd > 1.5f) -1.8f else -1.2f
+                limiterEnabled = true
+
+                musicOptStatus = buildString {
+                    append("✅ Poweramp Auto-EQ Applied! ")
+                    append("Deep 31/62Hz: %+.1f/%+.1f dB | ".format(userEqOffsetsDb[0], userEqOffsetsDb[1]))
+                    append("Anti-Hit 125Hz: %.1f dB | ".format(userEqOffsetsDb[2]))
+                    append("Vocals 1k/2kHz: %+.1f/%+.1f dB | ".format(userEqOffsetsDb[5], userEqOffsetsDb[6]))
+                    append("Anti-Harsh 4kHz: %.1f dB | Limiter: %.1f dBFS".format(userEqOffsetsDb[7], limiterCeilingDb))
+                }
+            } catch (_: Exception) {
+                musicOptStatus = "Music measurement stopped."
+            } finally {
+                isOptimizingMusic = false
             }
         }
     }

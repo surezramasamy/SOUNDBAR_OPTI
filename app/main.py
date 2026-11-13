@@ -383,10 +383,17 @@ def calculate_calibration():
             "confirmation": confirm_info
         }
 
-    # Build World-Class 60% Volume Distortion-Free Soundbar Tuning Guide (Movie vs Music + Anti-Boom/Anti-Hiss)
-    bass_tone = "-2 dB (Cuts 80-120 Hz room boom)" if any_boomy_sub else "0 dB (Smooth Deep Reference)"
-    treble_tone = "-2 dB (Eliminates harshness & room hiss at 60% Vol)" if (any_harsh_highs or any_room_hiss) else "-1 dB (Silk Non-Fatiguing Highs)"
-    sub_rec_lvl = results.get("subwoofer", {}).get("required_action_text", "-2 dB (Velvet Deep, Zero Fatigue)")
+    # Build World-Class 60% Volume Distortion-Free Soundbar Tuning Guide (Crystal Clear Vocals + Deep Bass)
+    max_boom = max([r.get("boom_excess_db", 0.0) for r in results.values()] or [0.0])
+    max_harsh = max([r.get("harshness_index_db", 0.0) for r in results.values()] or [0.0])
+    eq_125 = max(-6, -int(round(max(2.5, max_boom * 0.65))))
+    eq_250 = max(-4, -int(round(max(1.5, max_boom * 0.4))))
+    eq_4k = max(-5, -int(round(max(1.5, max_harsh * 0.7))))
+    eq_8k = -2 if any_room_hiss else -1
+
+    bass_tone = f"{max(-4, eq_125 + 1)} dB (Cuts 80-120 Hz room boom)" if any_boomy_sub else "+1 dB (Smooth Deep Velvet Reference)"
+    treble_tone = f"{eq_4k} dB (Eliminates harshness & room hiss)" if (any_harsh_highs or any_room_hiss) else "0 dB (Crystal Silk Highs)"
+    sub_rec_lvl = results.get("subwoofer", {}).get("required_action_text", "-1 dB (Velvet Deep, Zero Fatigue)")
 
     world_class_guide = {
         "master_volume_sweet_spot": "45% to 60% (Distortion-Free Headroom Zone — Max THD Measured: {:.2f}%)".format(max_thd),
@@ -396,19 +403,32 @@ def calculate_calibration():
             else "📶 Bluetooth Dolby Surround 180° Phase-Matrix Calibration"
         ),
         "smooth_deep_bass_secret": (
-            f"Set Woofer to {sub_rec_lvl}, turn 'Bass Enhancement / Extra Bass' OFF, and set 125 Hz EQ to -3 dB. "
-            "This removes the tiring 90-125 Hz chest-thump while keeping 32-58 Hz smooth cinematic sub-bass that you can enjoy for hours without ear fatigue."
+            f"Set Woofer to {sub_rec_lvl}, turn 'Bass Enhancement / Extra Bass' OFF, and set 125 Hz EQ to {eq_125} dB. "
+            "This removes tiring 90-125 Hz chest-thump while keeping 32-58 Hz smooth cinematic sub-bass and crystal-clear 1–2 kHz vocals."
         ),
         "anti_hiss_and_boom_eq": {
-            "63_hz_deep_sub": "+1 dB (Warm Deep Sub Foundation)",
-            "125_hz_upper_bass_hit": "-3 dB (Stops Boomy Room Resonance & Hard Hitting)",
-            "250_hz_room_mud": "-2 dB (Clears Boxy Wall/Floor Reflection)",
+            "63_hz_deep_sub": "+2 dB (Warm Deep Sub Foundation)",
+            "125_hz_upper_bass_hit": f"{eq_125} dB (Stops Boomy Room Resonance & Hard Hitting)",
+            "250_hz_room_mud": f"{eq_250} dB (Clears Boxy Wall/Floor Mud for Vocal Clarity)",
             "500_hz_warmth": "0 dB (Natural Body)",
-            "1_khz_vocal_core": "0 dB (Pure Uncolored Reference)",
-            "2_khz_presence": "-1 dB (Prevents Nasal Shoutiness at 60% Volume)",
-            "4_khz_sibilance": "-2 dB (Eliminates Ear-Piercing Harshness)",
-            "8_khz_to_10_khz_air": "-1 dB (Silky Air Without Hissing Noise)",
+            "1_khz_vocal_core": "+1 dB (Crystal-Clear Dialogue & Lead Vocals)",
+            "2_khz_presence": "+1 dB (Vocal Articulation Without Shoutiness)",
+            "4_khz_sibilance": f"{eq_4k} dB (Eliminates Ear-Piercing Harshness)",
+            "8_khz_to_10_khz_air": f"{eq_8k} dB (Silky Air Without Hissing Noise)",
             "simple_tone_control": f"Bass = {bass_tone} | Treble = {treble_tone}"
+        },
+        "poweramp_spotify_eq": {
+            "31_hz": "+2.0 dB (Deep Sub Velvet)",
+            "62_hz": "+1.5 dB (Warm Sub Cushion)",
+            "125_hz": f"{eq_125:.1f} dB (Anti-Boom)",
+            "250_hz": f"{eq_250:.1f} dB (Vocal Unmasking)",
+            "500_hz": "0.0 dB",
+            "1_khz": "+1.0 dB (Crystal Vocals)",
+            "2_khz": "+1.5 dB (Vocal Clarity)",
+            "4_khz": f"{eq_4k:.1f} dB (Anti-Harsh)",
+            "8_khz": f"{eq_8k:.1f} dB (Silk Detail)",
+            "16_khz": "+1.0 dB (Air)",
+            "tone_and_limiter": "Bass Tone: +2.0 dB | Treble Tone: 0.0 dB | Pre-Amp: -2.0 dB | Limiter Ceiling: -1.2 dBFS (ON)"
         },
         "movie_experience_preset": {
             "sound_mode": "Adaptive Sound / Surround (Dolby Atmos Active)",
@@ -637,20 +657,23 @@ def calculate_car_calibration():
             "confirmation": confirm_info
         }
 
-    # Build 13-Band Subtractive Graphic EQ Table for 60% Volume Distortion-Free World-Class Car Audio
+    # Build 13-Band Subtractive Graphic EQ Table for Crystal Clear Vocals + Deep Bass (60% Vol Distortion-Free)
     tw_cut_3k = max(-5, -int(round(max(2.0, max_tw_hot))))
     tw_cut_5k = max(-4, tw_cut_3k + 1)
+    sub_hit_excess = initial.get("subwoofer", {}).get("hard_hit_excess_db", 1.5)
+    eq_80 = max(-5, -int(round(max(2.5, sub_hit_excess * 0.8))))
+    eq_125 = max(-6, eq_80 - 1)
 
     pioneer_13band_table = {
         "50 Hz": "+1 dB (Deep Velvet Sub Warmth)",
-        "80 Hz": "-3 dB (Stops Hard-Hitting Chest Thump)",
-        "125 Hz": "-4 dB (Eliminates Boomy Door Woofer Slam)",
-        "200 Hz": "-2 dB (Clears Cabin Mud)",
+        "80 Hz": f"{eq_80} dB (Stops Hard-Hitting Chest Thump)",
+        "125 Hz": f"{eq_125} dB (Eliminates Boomy Door Woofer Slam)",
+        "200 Hz": "-2 dB (Clears Cabin Mud for Crystal Vocals)",
         "315 Hz": "-2 dB (Removes Door Panel Boxiness)",
         "500 Hz": "0 dB (Natural Lower Vocal Body)",
-        "800 Hz": "0 dB (Smooth Midrange Reference)",
-        "1.25k Hz": "0 dB (Pure Vocal Presence)",
-        "2k Hz": "-1 dB (Prevents Upper-Mid Shoutiness at 60% Vol)",
+        "800 Hz": "+1 dB (Crystal Clear Midrange Vocals)",
+        "1.25k Hz": "+1 dB (Pure Lead Vocal Presence)",
+        "2k Hz": "0 dB (Clean Vocal Articulation)",
         "3.15k Hz": f"{tw_cut_3k} dB (Tames Component Tweeter Ear Fatigue)",
         "5k Hz": f"{tw_cut_5k} dB (Eliminates Harsh Sibilance)",
         "8k Hz": "-1 dB (Smooth Coaxial & Tweeter Blend)",
@@ -663,7 +686,8 @@ def calculate_car_calibration():
         "loudness_setting": "OFF (Loudness boosts 100 Hz & 10 kHz by +10 dB which causes severe distortion at 60% Vol!)",
         "bass_boost_setting": "0 / OFF (Use Sub LPF 63 Hz + 50 Hz EQ +1 dB instead of Bass Boost)",
         "fader_and_balance": "Fader = 0, Balance = 0 (Use individual Speaker Levels below for exact 0.5 dB precision)",
-        "eq_curve_13band": pioneer_13band_table
+        "eq_curve_13band": pioneer_13band_table,
+        "poweramp_spotify_pass_through": f"Poweramp/App 10-Band EQ -> 31Hz:+2.0 | 62Hz:+1.5 | 125Hz:{eq_125}.0 | 250Hz:-2.0 | 500Hz:0 | 1kHz:+1.0 | 2kHz:+1.5 | 4kHz:{tw_cut_3k}.0 | 8kHz:-1.0 | 16kHz:+1.0 | Bass Tone:+2.5dB | Limiter:-1.2dBFS"
     }
 
     return {

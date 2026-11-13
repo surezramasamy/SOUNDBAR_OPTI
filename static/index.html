@@ -306,14 +306,26 @@
       `;
 
       const eq = g.anti_hiss_and_boom_eq || {};
+      const pa = g.poweramp_spotify_eq || {};
       document.getElementById('wcEqBox').innerHTML = `
         <div class="eq-row"><span><b>63 Hz (Deep Velvet Sub)</b></span><span style="color:#3fb950;font-weight:700;">${eq['63_hz_deep_sub']}</span></div>
         <div class="eq-row"><span><b>125 Hz (Anti-Hit / Anti-Boom)</b></span><span style="color:#ffd33d;font-weight:700;">${eq['125_hz_upper_bass_hit']}</span></div>
         <div class="eq-row"><span><b>250 Hz (Room Mud Cut)</b></span><span>${eq['250_hz_room_mud']}</span></div>
-        <div class="eq-row"><span><b>1 kHz – 2 kHz (Vocal Clarity)</b></span><span>${eq['2_khz_presence']}</span></div>
+        <div class="eq-row"><span><b>1 kHz (Crystal Vocals)</b></span><span style="color:#3fb950;font-weight:700;">${eq['1_khz_vocal_core']}</span></div>
+        <div class="eq-row"><span><b>2 kHz (Vocal Clarity)</b></span><span style="color:#3fb950;font-weight:700;">${eq['2_khz_presence']}</span></div>
         <div class="eq-row"><span><b>4 kHz (Anti-Harshness)</b></span><span style="color:#ffd33d;font-weight:700;">${eq['4_khz_sibilance']}</span></div>
         <div class="eq-row"><span><b>8–10 kHz (Anti-Hiss Silk Air)</b></span><span>${eq['8_khz_to_10_khz_air']}</span></div>
         <div style="margin-top:6px; color:var(--primary); font-weight:700;">2-Band Tone Control: ${eq['simple_tone_control']}</div>
+        ${pa['tone_and_limiter'] ? `
+          <div style="margin-top:10px; padding:8px; background:#161b22; border-radius:6px; border-left:3px solid #3fb950;">
+            <div style="color:#3fb950; font-weight:700; margin-bottom:4px;">🎛️ Poweramp / Spotify Pass-Through 10-Band EQ (Crystal Vocals + Deep Bass):</div>
+            <div style="font-family:monospace; font-size:11.5px;">
+              31Hz: <b>${pa['31_hz']}</b> | 62Hz: <b>${pa['62_hz']}</b> | 125Hz: <b>${pa['125_hz']}</b> | 250Hz: <b>${pa['250_hz']}</b> | 500Hz: <b>${pa['500_hz']}</b><br>
+              1kHz: <b>${pa['1_khz']}</b> | 2kHz: <b>${pa['2_khz']}</b> | 4kHz: <b>${pa['4_khz']}</b> | 8kHz: <b>${pa['8_khz']}</b> | 16kHz: <b>${pa['16_khz']}</b>
+            </div>
+            <div style="margin-top:4px; color:#58a6ff; font-size:11.5px;">${pa['tone_and_limiter']}</div>
+          </div>
+        ` : ''}
       `;
     }
 

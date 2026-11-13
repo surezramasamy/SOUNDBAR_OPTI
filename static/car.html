@@ -179,8 +179,14 @@
               <div>• <b>Loudness:</b> <span style="color:#f85149;font-weight:700;">${p60.loudness_setting}</span></div>
               <div>• <b>Bass Boost:</b> <span style="color:#3fb950;font-weight:700;">${p60.bass_boost_setting}</span></div>
             </div>
-            <h4 style="color:var(--blue); margin:10px 0 4px 0;">🎚️ Pioneer 13-Band Graphic EQ Settings (Smooth Deep Bass, Zero Hit/Harshness):</h4>
+            <h4 style="color:var(--blue); margin:10px 0 4px 0;">🎚️ Pioneer 13-Band Graphic EQ Settings (Crystal Clear Vocals + Smooth Deep Bass):</h4>
             <div class="eq-grid">${eqHtml}</div>
+            ${p60.poweramp_spotify_pass_through ? `
+              <div class="xover-item" style="margin-top:10px; border-left:3px solid var(--green);">
+                <div style="color:var(--green); font-weight:700; margin-bottom:4px;">🎛️ Poweramp / Spotify Pass-Through App EQ (Crystal Vocals + Deep Bass):</div>
+                <div style="font-family:monospace; color:#c9d1d9;">${p60.poweramp_spotify_pass_through}</div>
+              </div>
+            ` : ''}
           `;
         }
       } else {
