@@ -73,6 +73,21 @@ class MainActivity : Activity() {
     private val eqBandLabels = mutableListOf<TextView>()
     private val eqBandSeeks = mutableListOf<SeekBar>()
 
+    // Poweramp Top Tab Bar & AudioFX UI (v2.5)
+    private lateinit var tabEqBtn: Button
+    private lateinit var tabFxBtn: Button
+    private lateinit var tabMicBtn: Button
+    private lateinit var eqTabContainer: LinearLayout
+    private lateinit var fxTabContainer: LinearLayout
+    private lateinit var micTabContainer: LinearLayout
+    private lateinit var fxToggleBtn: Button
+    private lateinit var stereoExpandLabel: TextView
+    private lateinit var stereoExpandSeek: SeekBar
+    private lateinit var bassBoostLabel: TextView
+    private lateinit var bassBoostSeek: SeekBar
+    private val reverbPresetBtns = mutableListOf<Button>()
+    private var activeTabIndex = 0
+
     // Sliders
     private lateinit var deepWarmthLabel: TextView
     private lateinit var threshValueLabel: TextView
@@ -329,6 +344,27 @@ class MainActivity : Activity() {
             val liveVal = LiveSubPassThroughService.liveAppliedEqDb[i]
             eqBandLabels[i].text = "%-6s | User: %+.1f dB  (Live DSP: %+.1f dB)".format(labelName, userVal, liveVal)
         }
+
+        val fxOn = LiveSubPassThroughService.fxEnabled
+        fxToggleBtn.text = if (fxOn) "✨ POWERAMP AUDIO FX: ON" else "⚪ POWERAMP AUDIO FX: OFF"
+        fxToggleBtn.background = roundedBg(if (fxOn) "#3FB950" else "#21262D", "#3FB950")
+        fxToggleBtn.setTextColor(if (fxOn) Color.BLACK else Color.WHITE)
+
+        stereoExpandLabel.text = "Stereo Widening / 3D Spatializer FX: ${LiveSubPassThroughService.stereoExpandPct}%"
+        bassBoostLabel.text = "Deep Sub BassBoost FX: ${LiveSubPassThroughService.bassBoostPct}%"
+        for (rIdx in reverbPresetBtns.indices) {
+            stylePresetBtn(reverbPresetBtns[rIdx], LiveSubPassThroughService.reverbPreset == rIdx)
+        }
+    }
+
+    private fun selectTab(tabIndex: Int) {
+        activeTabIndex = tabIndex
+        eqTabContainer.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
+        fxTabContainer.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
+        micTabContainer.visibility = if (tabIndex == 2) View.VISIBLE else View.GONE
+        stylePresetBtn(tabEqBtn, tabIndex == 0)
+        stylePresetBtn(tabFxBtn, tabIndex == 1)
+        stylePresetBtn(tabMicBtn, tabIndex == 2)
     }
 
     private fun stylePresetBtn(btn: Button, active: Boolean) {
@@ -370,15 +406,15 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "360° Premium Sound & Sub Guard"
-            textSize = 21f
+            text = "360° Poweramp Sound & Sub Guard v2.5"
+            textSize = 20.5f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }
         root.addView(title)
 
         val subtitle = TextView(this).apply {
-            text = "Deep Background Bass Without Hitting • Front + Rear + Sub Live Optimizer"
+            text = "Poweramp 10-Band EQ • Stereo/Bass/Reverb FX • Live Spotify Optimizer"
             textSize = 12f
             setTextColor(Color.parseColor("#58A6FF"))
             setPadding(0, 4, 0, 8)
@@ -583,7 +619,60 @@ class MainActivity : Activity() {
         root.addView(masterCard)
 
         // =========================================================================
-        // CARD 3: REAL-TIME 5-ZONE ALL-SPEAKER MICROPHONE METERS
+        // TOP POWERAMP 3-TAB BAR (EQ | FX & LIMITER | MIC & CALIBRATE)
+        // =========================================================================
+        val tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 3f
+            layoutParams = sectionMargin()
+        }
+        val tabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(4, 0, 4, 0)
+        }
+        tabEqBtn = Button(this).apply {
+            text = "🎛️ Poweramp EQ"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(0) }
+        }
+        tabFxBtn = Button(this).apply {
+            text = "✨ FX & Limiter"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(1) }
+        }
+        tabMicBtn = Button(this).apply {
+            text = "📊 Mic & Cal"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(2) }
+        }
+        tabBar.addView(tabEqBtn)
+        tabBar.addView(tabFxBtn)
+        tabBar.addView(tabMicBtn)
+        root.addView(tabBar)
+
+        eqTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.VISIBLE
+        }
+        fxTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        micTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        root.addView(eqTabContainer)
+        root.addView(fxTabContainer)
+        root.addView(micTabContainer)
+
+        // =========================================================================
+        // CARD 3: REAL-TIME 5-ZONE ALL-SPEAKER MICROPHONE METERS (TAB 3)
         // =========================================================================
         val meterCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -701,7 +790,7 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#3FB950"))
         }
         meterCard.addView(thdBadgeText)
-        root.addView(meterCard)
+        micTabContainer.addView(meterCard)
 
         // =========================================================================
         // CARD 4: ONE-TAP 360° ALL-SPEAKER AUTO-CALIBRATION (FRONT + REAR + SUB)
@@ -754,7 +843,7 @@ class MainActivity : Activity() {
             setPadding(0, 14, 0, 0)
         }
         calCard.addView(calReportText)
-        root.addView(calCard)
+        micTabContainer.addView(calCard)
 
         // =========================================================================
         // CARD 4B: POWERAMP-STYLE 10-BAND PASS-THROUGH EQ, TONE & LIMITER FOR SPOTIFY
@@ -981,11 +1070,125 @@ class MainActivity : Activity() {
                 for (i in 0 until 10) {
                     eqBandSeeks[i].progress = ((LiveSubPassThroughService.userEqOffsetsDb[i] + 10.0f) * 2.0f).toInt().coerceIn(0, 32)
                 }
+                stereoExpandSeek.progress = LiveSubPassThroughService.stereoExpandPct
+                bassBoostSeek.progress = LiveSubPassThroughService.bassBoostPct
                 refreshMeters()
             }
         }
         powerampCard.addView(resetPaBtn)
-        root.addView(powerampCard)
+        eqTabContainer.addView(powerampCard)
+
+        // =========================================================================
+        // CARD 4C: POWERAMP AUDIO FX (STEREO EXPAND + DEEP BASSBOOST + REVERB) (TAB 2)
+        // =========================================================================
+        val fxCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+
+        val fxHeader = TextView(this).apply {
+            text = "✨ POWERAMP AUDIO FX ENGINE (STEREO • SUB • REVERB)"
+            textSize = 13f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+        }
+        fxCard.addView(fxHeader)
+
+        val fxDesc = TextView(this).apply {
+            text = "Hardware Stereo Widening (Virtualizer), Deep Sub BassBoost FX, and Room Ambience Reverb applied live to Spotify & YouTube Music."
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 4, 0, 14)
+        }
+        fxCard.addView(fxDesc)
+
+        fxToggleBtn = Button(this).apply {
+            text = "✨ POWERAMP AUDIO FX: ON"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setOnClickListener {
+                LiveSubPassThroughService.fxEnabled = !LiveSubPassThroughService.fxEnabled
+                refreshMeters()
+            }
+        }
+        fxCard.addView(fxToggleBtn)
+
+        stereoExpandLabel = TextView(this).apply {
+            text = "Stereo Widening / 3D Spatializer FX: 35%"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            setPadding(0, 18, 0, 0)
+        }
+        fxCard.addView(stereoExpandLabel)
+        stereoExpandSeek = SeekBar(this).apply {
+            max = 100
+            progress = LiveSubPassThroughService.stereoExpandPct
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) LiveSubPassThroughService.stereoExpandPct = p
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        fxCard.addView(stereoExpandSeek)
+
+        bassBoostLabel = TextView(this).apply {
+            text = "Deep Sub BassBoost FX: 30%"
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
+            setPadding(0, 16, 0, 0)
+        }
+        fxCard.addView(bassBoostLabel)
+        bassBoostSeek = SeekBar(this).apply {
+            max = 100
+            progress = LiveSubPassThroughService.bassBoostPct
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
+                    if (fromUser) LiveSubPassThroughService.bassBoostPct = p
+                }
+                override fun onStartTrackingTouch(s: SeekBar?) {}
+                override fun onStopTrackingTouch(s: SeekBar?) {}
+            })
+        }
+        fxCard.addView(bassBoostSeek)
+
+        val reverbTitle = TextView(this).apply {
+            text = "ROOM AMBIENCE / REVERB FX PRESET:"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 18, 0, 8)
+        }
+        fxCard.addView(reverbTitle)
+
+        reverbPresetBtns.clear()
+        val reverbNames = arrayOf("None", "Small Room", "Med Room", "Large Hall", "Plate")
+        val reverbRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 5f
+        }
+        val revLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(3, 0, 3, 0)
+        }
+        for (rIdx in reverbNames.indices) {
+            val rBtn = Button(this).apply {
+                text = reverbNames[rIdx]
+                textSize = 10f
+                layoutParams = revLp
+                setPadding(4, 14, 4, 14)
+                setOnClickListener {
+                    LiveSubPassThroughService.reverbPreset = rIdx
+                    refreshMeters()
+                }
+            }
+            reverbPresetBtns.add(rBtn)
+            reverbRow.addView(rBtn)
+        }
+        fxCard.addView(reverbRow)
+        fxTabContainer.addView(fxCard)
 
         // =========================================================================
         // CARD 5: FINE-TUNE 360° SOUND & DEEP VELVET SUB SLIDERS
@@ -1115,7 +1318,7 @@ class MainActivity : Activity() {
             })
         }
         sliderCard.addView(tweeterSeek)
-        root.addView(sliderCard)
+        fxTabContainer.addView(sliderCard)
 
         // =========================================================================
         // CARD 6: ANDROID AUTO LAUNCHER SETUP FOR PIONEER DMH-Z5290BT
@@ -1152,8 +1355,9 @@ class MainActivity : Activity() {
             setOnClickListener { openAndroidAutoSettings() }
         }
         autoCard.addView(autoSettingsBtn)
-        root.addView(autoCard)
+        micTabContainer.addView(autoCard)
 
+        selectTab(0)
         scroll.addView(root)
         return scroll
     }

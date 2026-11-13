@@ -18,8 +18,11 @@ import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.media.audiofx.AudioEffect
+import android.media.audiofx.BassBoost
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
+import android.media.audiofx.PresetReverb
+import android.media.audiofx.Virtualizer
 import android.os.Build
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
@@ -80,7 +83,17 @@ class LiveSubPassThroughService : Service() {
             maxSubCutDb = 12.0f
             surroundClarityDb = 2.5f
             tweeterSmoothDb = 2.5f
+            fxEnabled = true
+            stereoExpandPct = 35
+            bassBoostPct = 30
+            reverbPreset = 0
         }
+
+        // Poweramp AudioFX Engine (Stereo Widening / Deep Sub BassBoost / Reverb Ambience)
+        @Volatile var fxEnabled = true
+        @Volatile var stereoExpandPct = 35         // 0-100% Virtualizer 3D Stereo Expand
+        @Volatile var bassBoostPct = 30            // 0-100% Hardware BassBoost FX
+        @Volatile var reverbPreset = 0             // 0=None, 1=SmallRoom, 2=MediumRoom, 3=LargeHall, 4=Plate
 
         // User-controllable 360° Premium Sound Tuning Targets
         @Volatile var soundProfile = "DEEP_VELVET" // DEEP_VELVET, SURROUND_360, PURE_VOCAL, LOUDNESS_RICH
@@ -153,6 +166,9 @@ class LiveSubPassThroughService : Service() {
 
     private val dspProcessors = ConcurrentHashMap<Int, DynamicsProcessing>()
     private val eqProcessors = ConcurrentHashMap<Int, Equalizer>()
+    private val virtualizerProcessors = ConcurrentHashMap<Int, Virtualizer>()
+    private val bassBoostProcessors = ConcurrentHashMap<Int, BassBoost>()
+    private val reverbProcessors = ConcurrentHashMap<Int, PresetReverb>()
     private var dynamicReceiverRegistered = false
 
     private val dynamicSessionReceiver = object : BroadcastReceiver() {
@@ -392,11 +408,56 @@ class LiveSubPassThroughService : Service() {
                 eqProcessors[sessionId] = eq
             } catch (_: Exception) {}
         }
+
+        // Poweramp AudioFX: Stereo Widening / 3D Spatializer
+        if (!virtualizerProcessors.containsKey(sessionId)) {
+            try {
+                val virt = Virtualizer(100, sessionId)
+                if (virt.strengthSupported) {
+                    virt.setStrength((stereoExpandPct * 10).coerceIn(0, 1000).toShort())
+                }
+                virt.enabled = fxEnabled && !isBypassed && stereoExpandPct > 0
+                virtualizerProcessors[sessionId] = virt
+            } catch (_: Exception) {}
+        }
+
+        // Poweramp AudioFX: Deep Sub BassBoost
+        if (!bassBoostProcessors.containsKey(sessionId)) {
+            try {
+                val bb = BassBoost(100, sessionId)
+                if (bb.strengthSupported) {
+                    bb.setStrength((bassBoostPct * 10).coerceIn(0, 1000).toShort())
+                }
+                bb.enabled = fxEnabled && !isBypassed && bassBoostPct > 0
+                bassBoostProcessors[sessionId] = bb
+            } catch (_: Exception) {}
+        }
+
+        // Poweramp AudioFX: Room Ambience / PresetReverb
+        if (!reverbProcessors.containsKey(sessionId)) {
+            try {
+                val rev = PresetReverb(100, sessionId)
+                rev.preset = mapReverbPresetId(reverbPreset)
+                rev.enabled = fxEnabled && !isBypassed && reverbPreset > 0
+                reverbProcessors[sessionId] = rev
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun mapReverbPresetId(idx: Int): Short = when (idx) {
+        1 -> PresetReverb.PRESET_SMALLROOM
+        2 -> PresetReverb.PRESET_MEDIUMROOM
+        3 -> PresetReverb.PRESET_LARGEHALL
+        4 -> PresetReverb.PRESET_PLATE
+        else -> PresetReverb.PRESET_NONE
     }
 
     private fun detachDspFromSession(sessionId: Int) {
         try { dspProcessors.remove(sessionId)?.release() } catch (_: Exception) {}
         try { eqProcessors.remove(sessionId)?.release() } catch (_: Exception) {}
+        try { virtualizerProcessors.remove(sessionId)?.release() } catch (_: Exception) {}
+        try { bassBoostProcessors.remove(sessionId)?.release() } catch (_: Exception) {}
+        try { reverbProcessors.remove(sessionId)?.release() } catch (_: Exception) {}
     }
 
     /**
@@ -507,6 +568,32 @@ class LiveSubPassThroughService : Service() {
                     val millibel = (targetDb * 100.0f).toInt().coerceIn(minLvl, maxLvl).toShort()
                     eq.setBandLevel(b.toShort(), millibel)
                 }
+            } catch (_: Exception) {}
+        }
+
+        // Apply Poweramp AudioFX (Stereo Widening, Deep Sub BassBoost, Reverb Ambience)
+        val fxActive = fxEnabled && !bypass
+        for ((_, virt) in virtualizerProcessors) {
+            try {
+                if (virt.strengthSupported) {
+                    virt.setStrength((stereoExpandPct * 10).coerceIn(0, 1000).toShort())
+                }
+                virt.enabled = fxActive && stereoExpandPct > 0
+            } catch (_: Exception) {}
+        }
+        for ((_, bb) in bassBoostProcessors) {
+            try {
+                if (bb.strengthSupported) {
+                    bb.setStrength((bassBoostPct * 10).coerceIn(0, 1000).toShort())
+                }
+                bb.enabled = fxActive && bassBoostPct > 0
+            } catch (_: Exception) {}
+        }
+        val mappedReverb = mapReverbPresetId(reverbPreset)
+        for ((_, rev) in reverbProcessors) {
+            try {
+                rev.preset = mappedReverb
+                rev.enabled = fxActive && reverbPreset > 0
             } catch (_: Exception) {}
         }
     }
@@ -889,6 +976,18 @@ class LiveSubPassThroughService : Service() {
             try { eq.release() } catch (_: Exception) {}
         }
         eqProcessors.clear()
+        for ((_, virt) in virtualizerProcessors) {
+            try { virt.release() } catch (_: Exception) {}
+        }
+        virtualizerProcessors.clear()
+        for ((_, bb) in bassBoostProcessors) {
+            try { bb.release() } catch (_: Exception) {}
+        }
+        bassBoostProcessors.clear()
+        for ((_, rev) in reverbProcessors) {
+            try { rev.release() } catch (_: Exception) {}
+        }
+        reverbProcessors.clear()
     }
 
     override fun onDestroy() {
