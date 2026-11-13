@@ -407,8 +407,8 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "360° Poweramp Sound & Sub Guard v2.5"
-            textSize = 20.5f
+            text = "360° Poweramp Sound & Sub Guard v2.6"
+            textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.WHITE)
         }
@@ -429,6 +429,62 @@ class MainActivity : Activity() {
             setPadding(0, 4, 0, 18)
         }
         root.addView(statusBadge)
+
+        // =========================================================================
+        // TOP POWERAMP 3-TAB BAR (IMMEDIATELY VISIBLE AT TOP ON LAUNCH)
+        // =========================================================================
+        val tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 3f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = 18 }
+        }
+        val tabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+            setMargins(4, 0, 4, 0)
+        }
+        tabEqBtn = Button(this).apply {
+            text = "🎛️ Poweramp EQ"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(0) }
+        }
+        tabFxBtn = Button(this).apply {
+            text = "✨ FX & Limiter"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(1) }
+        }
+        tabMicBtn = Button(this).apply {
+            text = "📊 Mic & Cal"
+            textSize = 11.5f
+            setTypeface(typeface, Typeface.BOLD)
+            layoutParams = tabLp
+            setOnClickListener { selectTab(2) }
+        }
+        tabBar.addView(tabEqBtn)
+        tabBar.addView(tabFxBtn)
+        tabBar.addView(tabMicBtn)
+        root.addView(tabBar)
+
+        eqTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.VISIBLE
+        }
+        fxTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        micTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+        }
+        root.addView(eqTabContainer)
+        root.addView(fxTabContainer)
+        root.addView(micTabContainer)
 
         // =========================================================================
         // CARD 1: NOW PLAYING SONG DETAILS & LIVE PASS-THROUGH PROOF
@@ -532,7 +588,6 @@ class MainActivity : Activity() {
             }
         }
         nowPlayingCard.addView(bypassBtn)
-        root.addView(nowPlayingCard)
 
         // =========================================================================
         // CARD 2: MASTER START / STOP & 4 ONE-TAP PREMIUM SOUND PROFILES
@@ -617,60 +672,6 @@ class MainActivity : Activity() {
         presetRow2.addView(presetVocalBtn)
         presetRow2.addView(presetLoudnessBtn)
         masterCard.addView(presetRow2)
-        root.addView(masterCard)
-
-        // =========================================================================
-        // TOP POWERAMP 3-TAB BAR (EQ | FX & LIMITER | MIC & CALIBRATE)
-        // =========================================================================
-        val tabBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = 3f
-            layoutParams = sectionMargin()
-        }
-        val tabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(4, 0, 4, 0)
-        }
-        tabEqBtn = Button(this).apply {
-            text = "🎛️ Poweramp EQ"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = tabLp
-            setOnClickListener { selectTab(0) }
-        }
-        tabFxBtn = Button(this).apply {
-            text = "✨ FX & Limiter"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = tabLp
-            setOnClickListener { selectTab(1) }
-        }
-        tabMicBtn = Button(this).apply {
-            text = "📊 Mic & Cal"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = tabLp
-            setOnClickListener { selectTab(2) }
-        }
-        tabBar.addView(tabEqBtn)
-        tabBar.addView(tabFxBtn)
-        tabBar.addView(tabMicBtn)
-        root.addView(tabBar)
-
-        eqTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.VISIBLE
-        }
-        fxTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        micTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        root.addView(eqTabContainer)
-        root.addView(fxTabContainer)
-        root.addView(micTabContainer)
 
         // =========================================================================
         // CARD 3: REAL-TIME 5-ZONE ALL-SPEAKER MICROPHONE METERS (TAB 3)
@@ -1078,6 +1079,9 @@ class MainActivity : Activity() {
         }
         powerampCard.addView(resetPaBtn)
         eqTabContainer.addView(powerampCard)
+        nowPlayingCard.layoutParams = sectionMargin()
+        eqTabContainer.addView(nowPlayingCard)
+        eqTabContainer.addView(masterCard)
 
         // =========================================================================
         // CARD 4C: POWERAMP AUDIO FX (STEREO EXPAND + DEEP BASSBOOST + REVERB) (TAB 2)

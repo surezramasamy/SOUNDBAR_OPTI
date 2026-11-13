@@ -101,7 +101,7 @@ def get_car_page():
 def get_live_sub_page():
     live_file = os.path.join(static_dir, "live_sub.html")
     if os.path.exists(live_file):
-        return FileResponse(live_file)
+        return FileResponse(live_file, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "360° Live Sound & Sub Guard Page."}
 
 
@@ -113,6 +113,7 @@ def download_apk():
             apk_file,
             media_type="application/vnd.android.package-archive",
             filename="LiveSubGuard.apk",
+            headers={"Cache-Control": "no-store, no-cache, must-revalidate"},
         )
     return RedirectResponse(
         url="https://github.com/surezramasamy/SOUNDBAR_OPTI/releases/latest/download/LiveSubGuard.apk"
