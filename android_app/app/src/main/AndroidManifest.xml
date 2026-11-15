@@ -15,9 +15,10 @@
 
     <application
         android:allowBackup="true"
+        android:hardwareAccelerated="true"
         android:icon="@drawable/ic_launcher"
         android:banner="@drawable/ic_launcher"
-        android:label="Eclipsa Audio &amp; 360 Sub Guard"
+        android:label="Eclipsa YouTube Player &amp; Audit"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <!-- Android Auto Support Metadata -->
@@ -27,6 +28,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"
             android:launchMode="singleTop">
             <intent-filter>

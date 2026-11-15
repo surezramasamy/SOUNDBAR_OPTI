@@ -1,1693 +1,1253 @@
 package com.soundbaropti.livesub
 
-import android.Manifest
-import android.app.Activity
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.Settings
+import android.os.SystemClock
+import android.text.TextUtils
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.ScrollView
-import android.widget.SeekBar
 import android.widget.TextView
+import android.app.Activity
+import org.json.JSONObject
+import kotlin.math.max
+import kotlin.math.min
 
+/**
+ * Eclipsa YouTube Player & Live Eclipsa Audit (v4.0)
+ *
+ * Clean, TV-first Fire TV Stick Max / Android TV app:
+ * 1. Immediate in-app YouTube playback with Chrome 135 Desktop UA ("YT Web + Cursor")
+ *    and Smart TV Tizen UA ("YT TV Mode"), full CookieManager + 3rd-party cookies + DOM storage,
+ *    hardware acceleration, and HTML5 CustomView fullscreen support.
+ * 2. Always-visible On-Screen Virtual Remote Cursor (RemoteCursorOverlayView) with smooth
+ *    Fire TV D-Pad movement, auto-scroll at WebView edges, neon click pulse feedback, and
+ *    clear Gold (#FFD33D) focus highlight + scale animations on Top Bar & Audit controls.
+ * 3. Live Eclipsa Audio & HDMI eARC Auditor HUD combining live YouTube MSE/video stream
+ *    telemetry (EclipsaBridge JS hook) with hardware HDMI sink / MediaCodec / Spatializer audit
+ *    from LiveSubPassThroughService.
+ */
 class MainActivity : Activity() {
 
+    private companion object {
+        const val URL_YT_WEB = "https://www.youtube.com"
+        const val URL_YT_TV = "https://www.youtube.com/tv"
+
+        const val UA_DESKTOP_CHROME =
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+        const val UA_SMART_TV =
+            "Mozilla/5.0 (SMART-TV; LINUX; Tizen 8.0) AppleWebKit/537.36 (KHTML, like Gecko) 108.0.5359.1/8.0 TV Safari/537.36"
+
+        const val COLOR_BG = "#080C14"
+        const val COLOR_BAR = "#0F1624"
+        const val COLOR_PANEL = "#121A2B"
+        const val COLOR_TEXT = "#F2F6FF"
+        const val COLOR_MUTED = "#9AB0CC"
+        const val COLOR_GOLD = "#FFD33D"
+        const val COLOR_CYAN = "#00E5FF"
+        const val COLOR_TEAL = "#1FD2B4"
+        const val COLOR_GREEN = "#2CE574"
+        const val COLOR_AMBER = "#FFB347"
+    }
+
+    private enum class PlayerMode {
+        YT_WEB,
+        YT_TV
+    }
+
+    private lateinit var rootFrame: FrameLayout
+    private lateinit var mainColumn: LinearLayout
+    private lateinit var topBarContainer: LinearLayout
+    private lateinit var buttonRow: LinearLayout
     private lateinit var statusBadge: TextView
-    private lateinit var passThroughBadge: TextView
-    private lateinit var songTitleText: TextView
-    private lateinit var songArtistText: TextView
-    private lateinit var playPauseBtn: Button
-    private lateinit var enableNotifBtn: Button
-    private lateinit var bypassBtn: Button
-    private lateinit var toggleBtn: Button
+    private lateinit var hintText: TextView
 
-    // Preset buttons
-    private lateinit var presetVelvetBtn: Button
-    private lateinit var presetSurroundBtn: Button
-    private lateinit var presetVocalBtn: Button
-    private lateinit var presetLoudnessBtn: Button
+    private lateinit var btnYtWeb: Button
+    private lateinit var btnYtTv: Button
+    private lateinit var btnCursor: Button
+    private lateinit var btnAudit: Button
+    private lateinit var btnFullscreen: Button
 
-    // 5-Zone Live Meters
-    private lateinit var deepSubValText: TextView
-    private lateinit var deepSubProgress: ProgressBar
-    private lateinit var hitBassValText: TextView
-    private lateinit var hitBassProgress: ProgressBar
-    private lateinit var cutValText: TextView
-    private lateinit var cutProgress: ProgressBar
-    private lateinit var midValText: TextView
-    private lateinit var midProgress: ProgressBar
-    private lateinit var highValText: TextView
-    private lateinit var thdBadgeText: TextView
+    private lateinit var auditCard: ScrollView
+    private lateinit var auditStreamSummary: TextView
+    private lateinit var auditHardwareSummary: TextView
+    private lateinit var auditVerdictText: TextView
+    private lateinit var btnRescanAudit: Button
+    private lateinit var btnCloseAudit: Button
 
-    // Auto-Calibration UI
-    private lateinit var autoCalBtn: Button
-    private lateinit var calProgressBar: ProgressBar
-    private lateinit var calStatusText: TextView
-    private lateinit var calReportText: TextView
+    private lateinit var playerContainer: FrameLayout
+    private lateinit var webView: WebView
+    private lateinit var cursorOverlay: RemoteCursorOverlayView
+    private lateinit var fullscreenContainer: FrameLayout
 
-    // Poweramp-Style 10-Band EQ, Tone & Limiter UI
-    private lateinit var optimizeSpotifyBtn: Button
-    private lateinit var spotifyOptStatusText: TextView
-    private lateinit var autoEqToggleBtn: Button
-    private lateinit var limiterToggleBtn: Button
-    private lateinit var toneBassLabel: TextView
-    private lateinit var toneBassSeek: SeekBar
-    private lateinit var toneTrebleLabel: TextView
-    private lateinit var toneTrebleSeek: SeekBar
-    private lateinit var preampLabel: TextView
-    private lateinit var preampSeek: SeekBar
-    private lateinit var limiterCeilingLabel: TextView
-    private lateinit var limiterCeilingSeek: SeekBar
-    private val eqBandLabels = mutableListOf<TextView>()
-    private val eqBandSeeks = mutableListOf<SeekBar>()
+    private var customVideoView: View? = null
+    private var customVideoCallback: WebChromeClient.CustomViewCallback? = null
 
-    // Poweramp Top Tab Bar & AudioFX UI (v3.0 Eclipsa + Fire TV Max)
-    private lateinit var tabEclipsaBtn: Button
-    private lateinit var tabEqBtn: Button
-    private lateinit var tabFxBtn: Button
-    private lateinit var tabMicBtn: Button
-    private lateinit var eclipsaTabContainer: LinearLayout
-    private lateinit var eqTabContainer: LinearLayout
-    private lateinit var fxTabContainer: LinearLayout
-    private lateinit var micTabContainer: LinearLayout
+    private var currentMode: PlayerMode = PlayerMode.YT_WEB
+    private var cursorEnabled: Boolean = true
+    private var auditVisible: Boolean = false
+    private var appFullscreen: Boolean = false
+    private var cursorInitialized: Boolean = false
 
-    // Eclipsa Audio & Fire TV Stick Max UI
-    private lateinit var eclipsaBridgeBadge: TextView
-    private lateinit var eclipsaActivateBtn: Button
-    private lateinit var eclipsaAuditBtn: Button
-    private lateinit var eclipsaAuditVerdictText: TextView
-    private lateinit var eclipsaHdmiReportText: TextView
-    private lateinit var eclipsaCodecReportText: TextView
-    private lateinit var eclipsaChannelMapText: TextView
-    private lateinit var eclipsaTestStatusText: TextView
-    private lateinit var eclipsaWebView: WebView
-    private var activeEclipsaVideoId = "BnbxkFx7uzc"
-
-    private lateinit var fxToggleBtn: Button
-    private lateinit var stereoExpandLabel: TextView
-    private lateinit var stereoExpandSeek: SeekBar
-    private lateinit var bassBoostLabel: TextView
-    private lateinit var bassBoostSeek: SeekBar
-    private val reverbPresetBtns = mutableListOf<Button>()
-    private var activeTabIndex = 0
-
-    // Sliders
-    private lateinit var deepWarmthLabel: TextView
-    private lateinit var threshValueLabel: TextView
-    private lateinit var maxCutValueLabel: TextView
-    private lateinit var surroundLabel: TextView
-    private lateinit var tweeterLabel: TextView
+    private var lastFocusedBarButton: View? = null
+    private var cursorClickDownTime: Long = 0L
 
     private val uiHandler = Handler(Looper.getMainLooper())
-    private val updateRunnable = object : Runnable {
+    private val telemetryRefreshRunnable = object : Runnable {
         override fun run() {
-            refreshMeters()
-            uiHandler.postDelayed(this, 100)
+            refreshTelemetryViews()
+            uiHandler.postDelayed(this, 600L)
         }
     }
 
+    // Live YouTube JS bridge telemetry state
+    @Volatile private var jsVideoTitle: String = "Loading YouTube..."
+    @Volatile private var jsPageUrl: String = URL_YT_WEB
+    @Volatile private var jsIsPlaying: Boolean = false
+    @Volatile private var jsResolution: String = "--"
+    @Volatile private var jsPlaybackTime: String = "0:00 / 0:00"
+    @Volatile private var jsAudioDecodedBytes: Long = 0L
+    @Volatile private var jsMseCodecs: String = "Probing YouTube MSE stream..."
+    @Volatile private var jsBrowserCapabilities: String = "Checking WebView IAMF / EC-3 support..."
+    @Volatile private var jsLastUpdateMs: Long = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildUi())
-        requestNeededPermissions()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyImmersiveSystemUi()
+
+        buildCleanTvUi()
+        startBackgroundAuditService()
+        loadPlayerMode(PlayerMode.YT_WEB, initialLoad = true)
+
+        uiHandler.post(telemetryRefreshRunnable)
     }
 
     override fun onResume() {
         super.onResume()
-        NowPlayingListenerService.refreshFromMediaSessionManager(this)
-        uiHandler.post(updateRunnable)
+        applyImmersiveSystemUi()
+        webView.onResume()
+        CookieManager.getInstance().flush()
     }
 
     override fun onPause() {
+        CookieManager.getInstance().flush()
+        webView.onPause()
         super.onPause()
-        uiHandler.removeCallbacks(updateRunnable)
     }
 
     override fun onDestroy() {
-        try { eclipsaWebView.destroy() } catch (_: Exception) {}
+        uiHandler.removeCallbacks(telemetryRefreshRunnable)
+        try {
+            webView.destroy()
+        } catch (_: Exception) {
+        }
         super.onDestroy()
     }
 
-    private fun startServiceCompat(intent: Intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+    @Suppress("DEPRECATION")
+    private fun applyImmersiveSystemUi() {
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
     }
 
-    private fun requestNeededPermissions() {
-        val perms = mutableListOf<String>()
-        if (packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)) {
-            perms.add(Manifest.permission.RECORD_AUDIO)
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            perms.add(Manifest.permission.POST_NOTIFICATIONS)
-        }
-        val missing = perms.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-        if (missing.isNotEmpty()) {
-            requestPermissions(missing.toTypedArray(), 200)
-        }
-    }
-
-    private fun toggleService() {
-        val intent = Intent(this, LiveSubPassThroughService::class.java)
-        if (LiveSubPassThroughService.isRunning) {
-            intent.action = LiveSubPassThroughService.ACTION_STOP
-            startService(intent)
-        } else {
-            intent.action = LiveSubPassThroughService.ACTION_START
-            startServiceCompat(intent)
-        }
-    }
-
-    private fun activateEclipsaBridge() {
-        LiveSubPassThroughService.applyPreset("ECLIPSA_714")
-        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
-            action = LiveSubPassThroughService.ACTION_START
-        }
-        startServiceCompat(intent)
-        refreshMeters()
-    }
-
-    private fun triggerEclipsaAudit() {
-        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
-            action = LiveSubPassThroughService.ACTION_RUN_ECLIPSA_AUDIT
-        }
-        startServiceCompat(intent)
-    }
-
-    private fun triggerEclipsaTest(testId: String) {
-        LiveSubPassThroughService.applyPreset("ECLIPSA_714")
-        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
-            action = LiveSubPassThroughService.ACTION_PLAY_ECLIPSA_TEST
-            putExtra(LiveSubPassThroughService.EXTRA_ECLIPSA_TEST_ID, testId)
-        }
-        startServiceCompat(intent)
-    }
-
-    private fun playVideoInBuiltInEclipsaPlayer(videoId: String) {
-        activeEclipsaVideoId = videoId
-        activateEclipsaBridge()
-        val embedHtml = """
-            <!DOCTYPE html>
-            <html><body style="margin:0;background:#000;">
-            <iframe width="100%" height="100%" style="position:fixed;top:0;left:0;width:100%;height:100%;border:0;"
-              src="https://www.youtube.com/embed/$videoId?autoplay=1&rel=0&playsinline=1"
-              allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
-            </body></html>
-        """.trimIndent()
-        eclipsaWebView.loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", null)
-    }
-
-    private fun openVideoInFireTvYouTube(videoId: String) {
-        activeEclipsaVideoId = videoId
-        activateEclipsaBridge()
+    private fun startBackgroundAuditService() {
         try {
-            val ytIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-            startActivity(ytIntent)
-        } catch (_: Exception) {}
-    }
-
-    private fun triggerAutoCalibration() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestNeededPermissions()
-            return
-        }
-        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
-            action = LiveSubPassThroughService.ACTION_RUN_SWEEP
-        }
-        startServiceCompat(intent)
-    }
-
-    private fun triggerSpotifyOptimize() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestNeededPermissions()
-            return
-        }
-        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
-            action = LiveSubPassThroughService.ACTION_OPTIMIZE_MUSIC
-        }
-        startServiceCompat(intent)
-    }
-
-    private fun openNotificationAccessSettings() {
-        try {
-            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            val startIntent = Intent(this, LiveSubPassThroughService::class.java).apply {
+                action = LiveSubPassThroughService.ACTION_START
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(startIntent)
+            } else {
+                startService(startIntent)
+            }
+            triggerHardwareAuditScan()
         } catch (_: Exception) {
-            startActivity(Intent(Settings.ACTION_SETTINGS))
         }
     }
 
-    private fun openAndroidAutoSettings() {
+    private fun triggerHardwareAuditScan() {
         try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setPackage("com.google.android.projection.gearhead")
+            val scanIntent = Intent(this, LiveSubPassThroughService::class.java).apply {
+                action = LiveSubPassThroughService.ACTION_RUN_ECLIPSA_AUDIT
             }
-            startActivity(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(scanIntent)
+            } else {
+                startService(scanIntent)
+            }
         } catch (_: Exception) {
-            try {
-                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                    data = Uri.parse("package:com.google.android.projection.gearhead")
-                }
-                startActivity(intent)
-            } catch (_: Exception) {
-                startActivity(Intent(Settings.ACTION_SETTINGS))
-            }
         }
     }
 
-    private fun refreshMeters() {
-        val running = LiveSubPassThroughService.isRunning
-        val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val musicActive = am.isMusicActive || NowPlayingListenerService.isPlaying
-
-        statusBadge.text = if (running) {
-            "● 360° PREMIUM SOUND & SUB GUARD ACTIVE (BACKGROUND + ANDROID AUTO)"
-        } else {
-            "○ ENGINE STOPPED — TAP START BELOW"
-        }
-        statusBadge.setTextColor(if (running) Color.parseColor("#3FB950") else Color.parseColor("#8B949E"))
-
-        // Now Playing & Pass-Through Proof Card
-        val notifGranted = NowPlayingListenerService.isNotificationAccessGranted(this)
-        enableNotifBtn.visibility = if (notifGranted) android.view.View.GONE else android.view.View.VISIBLE
-
-        val appName = NowPlayingListenerService.currentAppName
-        val pulse = LiveSubPassThroughService.passThroughPulse
-        passThroughBadge.text = when {
-            !running -> "⚪ PASS-THROUGH STANDBY • Start Optimizer to Intercept Audio"
-            LiveSubPassThroughService.isBypassed -> "🟠 A/B BYPASS MODE ACTIVE • Raw Unprocessed Audio ($appName)"
-            musicActive -> "🟢 PASS-THROUGH LOCKED & STREAMING • $appName (DSP Frame #$pulse)"
-            else -> "🟢 PASS-THROUGH READY • Waiting for Play in $appName (Frame #$pulse)"
-        }
-        passThroughBadge.setTextColor(
-            when {
-                !running -> Color.parseColor("#8B949E")
-                LiveSubPassThroughService.isBypassed -> Color.parseColor("#D29922")
-                else -> Color.parseColor("#3FB950")
-            }
-        )
-
-        songTitleText.text = if (NowPlayingListenerService.currentTitle == "Waiting for Music Player..." && musicActive) {
-            "🎵 Active Music Stream Detected ($appName)"
-        } else {
-            "🎵 ${NowPlayingListenerService.currentTitle}"
-        }
-
-        val albumPart = if (NowPlayingListenerService.currentAlbum.isNotBlank()) " • ${NowPlayingListenerService.currentAlbum}" else ""
-        songArtistText.text = if (!notifGranted && NowPlayingListenerService.currentTitle == "Waiting for Music Player...") {
-            "Tap 'Enable Song Title Sync' below to display exact Spotify / YouTube Music track info"
-        } else {
-            "${NowPlayingListenerService.currentArtist}$albumPart ($appName)"
-        }
-
-        playPauseBtn.text = if (musicActive) "⏸ Pause" else "▶ Play"
-
-        // Bypass button state
-        val bypassed = LiveSubPassThroughService.isBypassed
-        bypassBtn.text = if (bypassed) {
-            "🔊 A/B MODE: RAW BYPASS (Tap to Re-Enable 360° Deep Velvet DSP)"
-        } else {
-            "🔊 A/B TEST: 360° PREMIUM DSP ON (Tap to Compare Raw Unprocessed)"
-        }
-        bypassBtn.background = roundedBg(if (bypassed) "#D29922" else "#21262D", "#58A6FF")
-        bypassBtn.setTextColor(if (bypassed) Color.BLACK else Color.parseColor("#58A6FF"))
-
-        // Start/Stop button
-        toggleBtn.text = if (running) "⏹ STOP 360° LIVE SOUND OPTIMIZER" else "▶ START 360° LIVE SOUND & SUB OPTIMIZER"
-        toggleBtn.background = roundedBg(if (running) "#F85149" else "#3FB950")
-        toggleBtn.setTextColor(if (running) Color.WHITE else Color.BLACK)
-
-        // Highlight active preset button
-        val prof = LiveSubPassThroughService.soundProfile
-        stylePresetBtn(presetVelvetBtn, prof == "DEEP_VELVET")
-        stylePresetBtn(presetSurroundBtn, prof == "SURROUND_360")
-        stylePresetBtn(presetVocalBtn, prof == "PURE_VOCAL")
-        stylePresetBtn(presetLoudnessBtn, prof == "LOUDNESS_RICH")
-
-        // 5-Zone Live Meters
-        val deepDb = LiveSubPassThroughService.liveDeepSubDb
-        val deepGain = LiveSubPassThroughService.liveDeepGainDb
-        val hitDb = LiveSubPassThroughService.liveSubDb
-        val cutDb = LiveSubPassThroughService.liveCutDb
-        val midDb = LiveSubPassThroughService.liveMidDb
-        val midGain = LiveSubPassThroughService.liveMidGainDb
-        val highDb = LiveSubPassThroughService.liveHighDb
-        val highGain = LiveSubPassThroughService.liveHighGainDb
-        val thd = LiveSubPassThroughService.liveDistortionPct
-
-        deepSubValText.text = "%.1f dB  (Velvet Boost: %+.1f dB)".format(deepDb, deepGain)
-        deepSubProgress.progress = ((deepDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
-
-        hitBassValText.text = "%.1f dB".format(hitDb)
-        hitBassProgress.progress = ((hitDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
-
-        cutValText.text = "%.1f dB Anti-Hit Cut".format(cutDb)
-        cutValText.setTextColor(if (cutDb < -4.0f) Color.parseColor("#FF7B00") else Color.parseColor("#3FB950"))
-        cutProgress.progress = (kotlin.math.abs(cutDb) / LiveSubPassThroughService.maxSubCutDb * 100f).toInt().coerceIn(0, 100)
-
-        midValText.text = "%.1f dB  (360° Stage: %+.1f dB)".format(midDb, midGain)
-        midProgress.progress = ((midDb - 35f) / 55f * 100f).toInt().coerceIn(0, 100)
-
-        highValText.text = "Tweeter Highs: %.1f dB (Silk Trim: %+.1f dB)".format(highDb, highGain)
-        thdBadgeText.text = "Distortion Guard: %.1f%% THD • 100%% CLIP-FREE HEADROOM".format(thd)
-        thdBadgeText.setTextColor(if (thd > 1.8f) Color.parseColor("#D29922") else Color.parseColor("#3FB950"))
-
-        // Auto-Calibration Status
-        calStatusText.text = LiveSubPassThroughService.calibrationStatus
-        calProgressBar.progress = LiveSubPassThroughService.calibrationProgress
-        calReportText.text = LiveSubPassThroughService.calRecommendation
-        autoCalBtn.isEnabled = !LiveSubPassThroughService.isCalibrating
-        autoCalBtn.text = if (LiveSubPassThroughService.isCalibrating) {
-            "⏳ MEASURING FRONT, REAR & SUB SPEAKERS..."
-        } else {
-            "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"
-        }
-
-        // Poweramp-Style Spotify Auto-Optimizer & 10-Band EQ Live Refresh
-        spotifyOptStatusText.text = LiveSubPassThroughService.musicOptStatus
-        optimizeSpotifyBtn.isEnabled = !LiveSubPassThroughService.isOptimizingMusic
-        optimizeSpotifyBtn.text = if (LiveSubPassThroughService.isOptimizingMusic) {
-            "⏳ MEASURING PLAYING SPOTIFY AUDIO..."
-        } else {
-            "🎧 MEASURE & OPTIMIZE PLAYING SPOTIFY SONG (AUTO-EQ)"
-        }
-
-        val autoOn = LiveSubPassThroughService.autoPowerampOptimize
-        autoEqToggleBtn.text = if (autoOn) "🤖 LIVE AUTO-EQ: ON (Mic + Manual)" else "🎛️ LIVE AUTO-EQ: OFF (Manual Only)"
-        autoEqToggleBtn.background = roundedBg(if (autoOn) "#3FB950" else "#21262D", "#3FB950")
-        autoEqToggleBtn.setTextColor(if (autoOn) Color.BLACK else Color.WHITE)
-
-        val limOn = LiveSubPassThroughService.limiterEnabled
-        limiterToggleBtn.text = if (limOn) "🛡️ LIMITER: ON (Clip-Free)" else "⚠️ LIMITER: OFF"
-        limiterToggleBtn.background = roundedBg(if (limOn) "#58A6FF" else "#21262D", "#58A6FF")
-        limiterToggleBtn.setTextColor(if (limOn) Color.BLACK else Color.WHITE)
-
-        toneBassLabel.text = "Bass Tone (31–62 Hz Deep Sub): %+.1f dB".format(LiveSubPassThroughService.toneBassDb)
-        toneTrebleLabel.text = "Treble Tone (8–16 kHz Silk Air): %+.1f dB".format(LiveSubPassThroughService.toneTrebleDb)
-        preampLabel.text = "Pre-Amp Headroom (Anti-Clip): %.1f dB".format(LiveSubPassThroughService.preampDb)
-        limiterCeilingLabel.text = "Limiter Ceiling: %.1f dBFS".format(LiveSubPassThroughService.limiterCeilingDb)
-
-        for (i in 0 until eqBandLabels.size) {
-            val labelName = LiveSubPassThroughService.EQ_LABELS[i]
-            val userVal = LiveSubPassThroughService.userEqOffsetsDb[i]
-            val liveVal = LiveSubPassThroughService.liveAppliedEqDb[i]
-            eqBandLabels[i].text = "%-6s | User: %+.1f dB  (Live DSP: %+.1f dB)".format(labelName, userVal, liveVal)
-        }
-
-        val fxOn = LiveSubPassThroughService.fxEnabled
-        fxToggleBtn.text = if (fxOn) "✨ POWERAMP AUDIO FX: ON" else "⚪ POWERAMP AUDIO FX: OFF"
-        fxToggleBtn.background = roundedBg(if (fxOn) "#3FB950" else "#21262D", "#3FB950")
-        fxToggleBtn.setTextColor(if (fxOn) Color.BLACK else Color.WHITE)
-
-        stereoExpandLabel.text = "Stereo Widening / 3D Spatializer FX: ${LiveSubPassThroughService.stereoExpandPct}%"
-        bassBoostLabel.text = "Deep Sub BassBoost FX: ${LiveSubPassThroughService.bassBoostPct}%"
-        for (rIdx in reverbPresetBtns.indices) {
-            stylePresetBtn(reverbPresetBtns[rIdx], LiveSubPassThroughService.reverbPreset == rIdx)
-        }
-
-        // Eclipsa Audio & Fire TV Stick Max Status Refresh
-        eclipsaBridgeBadge.text = if (running) {
-            "🟢 ECLIPSA 7.1.4 -> 9.1.4 BRIDGE ACTIVE • ${NowPlayingListenerService.currentAppName} (Frame #$pulse) • Audit: ${LiveSubPassThroughService.eclipsaAuditScore}/100"
-        } else {
-            "⚪ ECLIPSA BRIDGE STANDBY • Tap Activate below before launching YouTube on Fire TV Max"
-        }
-        eclipsaBridgeBadge.setTextColor(if (running) Color.parseColor("#3FB950") else Color.parseColor("#D29922"))
-        eclipsaAuditVerdictText.text = LiveSubPassThroughService.eclipsaAuditVerdict
-        eclipsaHdmiReportText.text = LiveSubPassThroughService.eclipsaHdmiSinkReport
-        eclipsaCodecReportText.text = LiveSubPassThroughService.eclipsaCodecReport
-        eclipsaChannelMapText.text = LiveSubPassThroughService.eclipsaChannelMapReport
-        eclipsaTestStatusText.text = LiveSubPassThroughService.eclipsaTestStatus
+    private fun dp(value: Int): Int {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value.toFloat(),
+            resources.displayMetrics
+        ).toInt()
     }
 
-    private fun selectTab(tabIndex: Int) {
-        activeTabIndex = tabIndex
-        eclipsaTabContainer.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
-        eqTabContainer.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
-        fxTabContainer.visibility = if (tabIndex == 2) View.VISIBLE else View.GONE
-        micTabContainer.visibility = if (tabIndex == 3) View.VISIBLE else View.GONE
-        stylePresetBtn(tabEclipsaBtn, tabIndex == 0)
-        stylePresetBtn(tabEqBtn, tabIndex == 1)
-        stylePresetBtn(tabFxBtn, tabIndex == 2)
-        stylePresetBtn(tabMicBtn, tabIndex == 3)
-    }
-
-    private fun stylePresetBtn(btn: Button, active: Boolean) {
-        btn.background = roundedBg(
-            if (active) "#58A6FF" else "#21262D",
-            if (active) "#58A6FF" else "#30363D"
-        )
-        btn.setTextColor(if (active) Color.BLACK else Color.WHITE)
-    }
-
-    private fun roundedBg(fillHex: String, strokeHex: String? = null): GradientDrawable =
-        GradientDrawable().apply {
-            cornerRadius = 22f
-            setColor(Color.parseColor(fillHex))
-            if (strokeHex != null) {
-                setStroke(3, Color.parseColor(strokeHex))
-            }
+    private fun buildCleanTvUi() {
+        rootFrame = FrameLayout(this).apply {
+            setBackgroundColor(Color.parseColor(COLOR_BG))
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+            )
         }
 
-    private fun cardBg(): GradientDrawable = GradientDrawable().apply {
-        cornerRadius = 30f
-        setColor(Color.parseColor("#161B22"))
-        setStroke(3, Color.parseColor("#30363D"))
-    }
-
-    private fun sectionMargin(): LinearLayout.LayoutParams = LinearLayout.LayoutParams(
-        LinearLayout.LayoutParams.MATCH_PARENT,
-        LinearLayout.LayoutParams.WRAP_CONTENT
-    ).apply { topMargin = 28 }
-
-    private fun buildUi(): ScrollView {
-        val scroll = ScrollView(this).apply {
-            setBackgroundColor(Color.parseColor("#0D1117"))
-        }
-
-        val root = LinearLayout(this).apply {
+        mainColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(36, 48, 36, 64)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        // Top compact Eclipsa Control Bar
+        topBarContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor(COLOR_BAR))
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        val appTitle = TextView(this).apply {
+            text = "ECLIPSA YOUTUBE PLAYER"
+            setTextColor(Color.parseColor(COLOR_TEXT))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+
+        statusBadge = TextView(this).apply {
+            text = "ECLIPSA AUDIT • SCANNING..."
+            setTextColor(Color.parseColor(COLOR_GOLD))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(999).toFloat()
+                setColor(Color.parseColor("#1B2436"))
+                setStroke(dp(1), Color.parseColor(COLOR_TEAL))
+            }
+        }
+
+        headerRow.addView(appTitle)
+        headerRow.addView(statusBadge)
+
+        buttonRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(8), 0, dp(4))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        btnYtWeb = createTvBarButton("YT Web + Cursor") {
+            loadPlayerMode(PlayerMode.YT_WEB, initialLoad = false)
+        }
+        btnYtTv = createTvBarButton("YT TV Mode") {
+            loadPlayerMode(PlayerMode.YT_TV, initialLoad = false)
+        }
+        btnCursor = createTvBarButton("Cursor: ON") {
+            cursorEnabled = !cursorEnabled
+            updateCursorUiState()
+        }
+        btnAudit = createTvBarButton("Eclipsa Audit") {
+            toggleAuditHud(!auditVisible)
+        }
+        btnFullscreen = createTvBarButton("Fullscreen") {
+            toggleAppFullscreen(!appFullscreen)
+        }
+
+        // Assign stable IDs and explicit 4-way D-Pad focus wiring
+        btnYtWeb.id = View.generateViewId()
+        btnYtTv.id = View.generateViewId()
+        btnCursor.id = View.generateViewId()
+        btnAudit.id = View.generateViewId()
+        btnFullscreen.id = View.generateViewId()
+
+        val barButtons = listOf(btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen)
+        barButtons.forEachIndexed { idx, btn ->
+            val lp = LinearLayout.LayoutParams(0, dp(42), 1f)
+            if (idx < barButtons.lastIndex) {
+                lp.marginEnd = dp(8)
+            }
+            btn.layoutParams = lp
+            btn.nextFocusLeftId = if (idx > 0) barButtons[idx - 1].id else btn.id
+            btn.nextFocusRightId = if (idx < barButtons.lastIndex) barButtons[idx + 1].id else btn.id
+            buttonRow.addView(btn)
+        }
+
+        hintText = TextView(this).apply {
+            text = "D-Pad Left/Right: Switch Control  |  D-Pad Down: Use Remote Cursor on YouTube  |  MENU: Bar / Exit Fullscreen"
+            setTextColor(Color.parseColor(COLOR_MUTED))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            setPadding(dp(2), dp(2), dp(2), 0)
+        }
+
+        topBarContainer.addView(headerRow)
+        topBarContainer.addView(buttonRow)
+        topBarContainer.addView(hintText)
+
+        // Collapsible Live Eclipsa Audit HUD
+        auditCard = buildAuditHudCard()
+        auditCard.visibility = View.GONE
+
+        // Fullscreen Player Container: WebView + On-Screen Remote Cursor Overlay
+        playerContainer = FrameLayout(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+            setBackgroundColor(Color.BLACK)
+        }
+
+        webView = createConfiguredWebView()
+        webView.id = View.generateViewId()
+        barButtons.forEach { it.nextFocusDownId = webView.id }
+
+        cursorOverlay = RemoteCursorOverlayView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            isClickable = false
+            isFocusable = false
+        }
+
+        playerContainer.addView(
+            webView,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        )
+        playerContainer.addView(cursorOverlay)
+
+        // Wire focus tracking on WebView so Cursor visibly highlights as active vs parked
+        webView.setOnFocusChangeListener { _, hasFocus ->
+            cursorOverlay.setCursorActive(hasFocus)
+        }
+
+        mainColumn.addView(topBarContainer)
+        mainColumn.addView(auditCard)
+        mainColumn.addView(playerContainer)
+
+        fullscreenContainer = FrameLayout(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(Color.BLACK)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        rootFrame.addView(mainColumn)
+        rootFrame.addView(fullscreenContainer)
+        setContentView(rootFrame)
+
+        updateTopBarVisuals()
+        updateCursorUiState()
+
+        // Default focus onto Top Bar first button so D-Pad switching works immediately,
+        // while keeping the Remote Cursor visibly parked on screen below ready on D-Pad Down.
+        lastFocusedBarButton = btnYtWeb
+        btnYtWeb.post {
+            btnYtWeb.requestFocus()
+            ensureInitialCursorPosition()
+        }
+    }
+
+    private fun createTvBarButton(label: String, onClick: () -> Unit): Button {
+        val btn = Button(this).apply {
+            text = label
+            isAllCaps = false
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            isFocusable = true
+            isFocusableInTouchMode = false
+            setOnClickListener { onClick() }
+        }
+
+        btn.setOnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) {
+                lastFocusedBarButton = v
+            }
+            applyBarButtonStyle(v as Button, isButtonActive(v), hasFocus)
+        }
+        return btn
+    }
+
+    private fun isButtonActive(btn: Button): Boolean {
+        return when (btn) {
+            btnYtWeb -> currentMode == PlayerMode.YT_WEB
+            btnYtTv -> currentMode == PlayerMode.YT_TV
+            btnCursor -> cursorEnabled
+            btnAudit -> auditVisible
+            btnFullscreen -> appFullscreen
+            else -> false
+        }
+    }
+
+    private fun applyBarButtonStyle(btn: Button, isActive: Boolean, isFocused: Boolean) {
+        val bgColor = when {
+            isFocused -> Color.parseColor("#2E260C")
+            isActive -> Color.parseColor("#11343C")
+            else -> Color.parseColor("#162033")
+        }
+        val strokeColor = when {
+            isFocused -> Color.parseColor(COLOR_GOLD)
+            isActive -> Color.parseColor(COLOR_TEAL)
+            else -> Color.parseColor("#2B3952")
+        }
+        val textColor = when {
+            isFocused -> Color.parseColor(COLOR_GOLD)
+            isActive -> Color.parseColor("#9CF8E8")
+            else -> Color.parseColor(COLOR_TEXT)
+        }
+        val strokeWidth = if (isFocused) dp(3) else dp(1)
+
+        btn.background = GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(bgColor)
+            setStroke(strokeWidth, strokeColor)
+        }
+        btn.setTextColor(textColor)
+        btn.animate()
+            .scaleX(if (isFocused) 1.06f else 1.0f)
+            .scaleY(if (isFocused) 1.06f else 1.0f)
+            .setDuration(110L)
+            .start()
+        btn.elevation = if (isFocused) dp(8).toFloat() else 0f
+    }
+
+    private fun updateTopBarVisuals() {
+        val all = listOf(btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen)
+        all.forEach { b ->
+            applyBarButtonStyle(b, isButtonActive(b), b.hasFocus())
+        }
+    }
+
+    private fun buildAuditHudCard(): ScrollView {
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(Color.parseColor(COLOR_PANEL))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(230)
+            )
+        }
+
+        val inner = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            layoutParams = ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         }
 
         val title = TextView(this).apply {
-            text = "Eclipsa Audio & 360° Sub Guard v3.0"
-            textSize = 20f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
+            text = "REAL-TIME ECLIPSA AUDIO (IAMF) & HDMI eARC AUDIT"
+            setTextColor(Color.parseColor(COLOR_CYAN))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setPadding(0, 0, 0, dp(6))
         }
-        root.addView(title)
 
-        val subtitle = TextView(this).apply {
-            text = "Fire TV Stick 4K Max • YouTube IAMF 7.1.4 -> 9.1.4 Samsung Soundbar • Poweramp EQ"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#A371F7"))
-            setPadding(0, 4, 0, 8)
+        auditVerdictText = TextView(this).apply {
+            text = "Initializing real-time YouTube & HDMI eARC audit..."
+            setTextColor(Color.parseColor(COLOR_GOLD))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setPadding(dp(10), dp(6), dp(10), dp(6))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#182132"))
+                setStroke(dp(1), Color.parseColor(COLOR_TEAL))
+            }
         }
-        root.addView(subtitle)
 
-        statusBadge = TextView(this).apply {
-            text = "○ STOPPED"
-            textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(0, 4, 0, 18)
-        }
-        root.addView(statusBadge)
-
-        // =========================================================================
-        // TOP 4-TAB BAR (ECLIPSA & YT FIRST FOR FIRE TV STICK 4K MAX + REMOTE)
-        // =========================================================================
-        val tabBar = LinearLayout(this).apply {
+        val columns = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            weightSum = 4f
+            setPadding(0, dp(8), 0, dp(8))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 18 }
-        }
-        val tabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(3, 0, 3, 0)
-        }
-        tabEclipsaBtn = Button(this).apply {
-            text = "🌌 Eclipsa & YT"
-            textSize = 10.5f
-            setTypeface(typeface, Typeface.BOLD)
-            isFocusable = true
-            layoutParams = tabLp
-            setOnClickListener { selectTab(0) }
-        }
-        tabEqBtn = Button(this).apply {
-            text = "🎛️ Poweramp EQ"
-            textSize = 10.5f
-            setTypeface(typeface, Typeface.BOLD)
-            isFocusable = true
-            layoutParams = tabLp
-            setOnClickListener { selectTab(1) }
-        }
-        tabFxBtn = Button(this).apply {
-            text = "✨ FX & Limiter"
-            textSize = 10.5f
-            setTypeface(typeface, Typeface.BOLD)
-            isFocusable = true
-            layoutParams = tabLp
-            setOnClickListener { selectTab(2) }
-        }
-        tabMicBtn = Button(this).apply {
-            text = "📊 Mic & Cal"
-            textSize = 10.5f
-            setTypeface(typeface, Typeface.BOLD)
-            isFocusable = true
-            layoutParams = tabLp
-            setOnClickListener { selectTab(3) }
-        }
-        tabBar.addView(tabEclipsaBtn)
-        tabBar.addView(tabEqBtn)
-        tabBar.addView(tabFxBtn)
-        tabBar.addView(tabMicBtn)
-        root.addView(tabBar)
-
-        eclipsaTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.VISIBLE
-        }
-        eqTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        fxTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        micTabContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
-        }
-        root.addView(eclipsaTabContainer)
-        root.addView(eqTabContainer)
-        root.addView(fxTabContainer)
-        root.addView(micTabContainer)
-
-        // =========================================================================
-        // ECLIPSA TAB CARD 1: REAL ECLIPSA AUDIO AUDIT & FIRE TV MAX -> SAMSUNG BRIDGE
-        // =========================================================================
-        val eclipsaAuditCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-        }
-        eclipsaAuditCard.addView(TextView(this).apply {
-            text = "🌌 FIRE TV STICK 4K MAX -> YOUTUBE -> SAMSUNG ECLIPSA BRIDGE"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#A371F7"))
-        })
-        eclipsaBridgeBadge = TextView(this).apply {
-            text = "⚪ ECLIPSA BRIDGE STANDBY"
-            textSize = 11.5f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#D29922"))
-            setPadding(0, 10, 0, 14)
-        }
-        eclipsaAuditCard.addView(eclipsaBridgeBadge)
-
-        eclipsaActivateBtn = Button(this).apply {
-            text = "🌌 ACTIVATE ECLIPSA 7.1.4 -> 9.1.4 SAMSUNG SOUNDBAR BRIDGE"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#A371F7")
-            setTextColor(Color.BLACK)
-            isFocusable = true
-            setPadding(16, 22, 16, 22)
-            setOnClickListener { activateEclipsaBridge() }
-        }
-        eclipsaAuditCard.addView(eclipsaActivateBtn)
-
-        eclipsaAuditBtn = Button(this).apply {
-            text = "🔍 RUN REAL ECLIPSA AUDIO & HDMI eARC AUDIT"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#21262D", "#58A6FF")
-            setTextColor(Color.parseColor("#58A6FF"))
-            isFocusable = true
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 14 }
-            layoutParams = lp
-            setPadding(16, 20, 16, 20)
-            setOnClickListener { triggerEclipsaAudit() }
-        }
-        eclipsaAuditCard.addView(eclipsaAuditBtn)
-
-        eclipsaAuditVerdictText = TextView(this).apply {
-            text = LiveSubPassThroughService.eclipsaAuditVerdict
-            textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-            setPadding(0, 14, 0, 4)
-        }
-        eclipsaAuditCard.addView(eclipsaAuditVerdictText)
-
-        eclipsaHdmiReportText = TextView(this).apply {
-            text = LiveSubPassThroughService.eclipsaHdmiSinkReport
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#C9D1D9"))
-            setPadding(0, 4, 0, 4)
-        }
-        eclipsaAuditCard.addView(eclipsaHdmiReportText)
-
-        eclipsaCodecReportText = TextView(this).apply {
-            text = LiveSubPassThroughService.eclipsaCodecReport
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 2, 0, 4)
-        }
-        eclipsaAuditCard.addView(eclipsaCodecReportText)
-
-        eclipsaChannelMapText = TextView(this).apply {
-            text = LiveSubPassThroughService.eclipsaChannelMapReport
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 4, 0, 0)
-        }
-        eclipsaAuditCard.addView(eclipsaChannelMapText)
-        eclipsaTabContainer.addView(eclipsaAuditCard)
-
-        // =========================================================================
-        // ECLIPSA TAB CARD 2: VERIFIED YOUTUBE ECLIPSA (IAMF itag 773) PLAYER
-        // =========================================================================
-        val eclipsaYtCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-        eclipsaYtCard.addView(TextView(this).apply {
-            text = "🎬 PLAY VERIFIED YOUTUBE ECLIPSA AUDIO (IAMF 7.1.4)"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-        })
-        eclipsaYtCard.addView(TextView(this).apply {
-            text = "Play directly inside the Built-In Eclipsa Spatial WebPlayer or launch Fire TV YouTube / SmartTube with our 7.1.4 -> 9.1.4 Eclipsa DSP locked on."
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 4, 0, 12)
-        })
-
-        eclipsaWebView = WebView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                460
-            ).apply { bottomMargin = 14 }
-            setBackgroundColor(Color.BLACK)
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = false
-            settings.loadWithOverviewMode = true
-            settings.useWideViewPort = true
-            settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
-            webViewClient = WebViewClient()
-            webChromeClient = WebChromeClient()
-            loadData(
-                "<html><body style='background:#090c10;color:#8b949e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;margin:0;padding:16px;'><div><b style='color:#a371f7;'>Built-In Eclipsa Audio Spatial Player</b><br><br>Tap <b>▶ Built-In Eclipsa Player</b> below to stream any verified YouTube IAMF 7.1.4 video with 9.1.4 DSP active.</div></body></html>",
-                "text/html",
-                "UTF-8"
             )
         }
-        eclipsaYtCard.addView(eclipsaWebView)
 
-        val curatedYtList = listOf(
-            Pair("BnbxkFx7uzc", "7.1.4 Speaker Test (Eclipsa Audio & IAMF) — Height + Surround"),
-            Pair("NZtshMSQTKA", "5.1.2 Soundcheck — Eclipsa Audio & IAMF Test for Soundbars"),
-            Pair("EMQBNlsTsRQ", "Eclipsa Audio / 7.1.4 Discrete Channel Check"),
-            Pair("t3Bxe4CVesU", "Height Speaker Test (7.1.4 IAMF) — 4 Top Speakers Only"),
-            Pair("zG44XEoA_HE", "Live Orchestra Captured in 3D Spatial Sound (Eclipsa / IAMF)")
-        )
-        for ((vid, vTitle) in curatedYtList) {
-            eclipsaYtCard.addView(TextView(this).apply {
-                text = "• $vTitle"
-                textSize = 12f
-                setTypeface(typeface, Typeface.BOLD)
-                setTextColor(Color.parseColor("#C9D1D9"))
-                setPadding(0, 10, 0, 6)
-            })
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                weightSum = 2f
+        auditStreamSummary = TextView(this).apply {
+            text = "Waiting for YouTube playback telemetry..."
+            setTextColor(Color.parseColor(COLOR_TEXT))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#0D1422"))
+                setStroke(dp(1), Color.parseColor("#25344E"))
             }
-            val rLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                setMargins(4, 0, 4, 6)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                marginEnd = dp(8)
             }
-            val inAppBtn = Button(this).apply {
-                text = "▶ Built-In Eclipsa Player"
-                textSize = 10.5f
-                background = roundedBg("#21262D", "#A371F7")
-                setTextColor(Color.parseColor("#D2A8FF"))
-                isFocusable = true
-                layoutParams = rLp
-                setOnClickListener { playVideoInBuiltInEclipsaPlayer(vid) }
+        }
+
+        auditHardwareSummary = TextView(this).apply {
+            text = "Scanning Fire TV HDMI eARC & MediaCodec capabilities..."
+            setTextColor(Color.parseColor(COLOR_TEXT))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            setPadding(dp(10), dp(8), dp(10), dp(8))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(8).toFloat()
+                setColor(Color.parseColor("#0D1422"))
+                setStroke(dp(1), Color.parseColor("#25344E"))
             }
-            val tvAppBtn = Button(this).apply {
-                text = "📺 Fire TV YouTube + DSP"
-                textSize = 10.5f
-                background = roundedBg("#21262D", "#3FB950")
-                setTextColor(Color.parseColor("#3FB950"))
-                isFocusable = true
-                layoutParams = rLp
-                setOnClickListener { openVideoInFireTvYouTube(vid) }
-            }
-            row.addView(inAppBtn)
-            row.addView(tvAppBtn)
-            eclipsaYtCard.addView(row)
-        }
-        eclipsaTabContainer.addView(eclipsaYtCard)
-
-        // =========================================================================
-        // ECLIPSA TAB CARD 3: BUILT-IN DISCRETE 12-CHANNEL ECLIPSA HARDWARE TEST
-        // =========================================================================
-        val eclipsaTestCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-        eclipsaTestCard.addView(TextView(this).apply {
-            text = "🔊 BUILT-IN 12-CHANNEL ECLIPSA 7.1.4 HARDWARE SPEAKER TEST"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#58A6FF"))
-        })
-        eclipsaTestStatusText = TextView(this).apply {
-            text = LiveSubPassThroughService.eclipsaTestStatus
-            textSize = 11.5f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-            setPadding(0, 8, 0, 12)
-        }
-        eclipsaTestCard.addView(eclipsaTestStatusText)
-
-        val testBtnConfigs = listOf(
-            Triple("🔊 Play Full 12-Ch Eclipsa 7.1.4 Sequential Check (Bed + 4 Height + LFE)", "full_714", "#58A6FF"),
-            Triple("☁️ Play 4-Speaker Overhead Height Only Test (TFL / TFR / TBL / TBR)", "height_only", "#A371F7"),
-            Triple("🎸 Play Deep Velvet LFE Sub Test (28–62 Hz • Zero Hard Hit)", "velvet_lfe", "#3FB950")
-        )
-        for ((label, tid, hex) in testBtnConfigs) {
-            val tBtn = Button(this).apply {
-                text = label
-                textSize = 11.5f
-                setTypeface(typeface, Typeface.BOLD)
-                background = roundedBg("#21262D", hex)
-                setTextColor(Color.parseColor(hex))
-                isFocusable = true
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { topMargin = 10 }
-                layoutParams = lp
-                setPadding(16, 18, 16, 18)
-                setOnClickListener { triggerEclipsaTest(tid) }
-            }
-            eclipsaTestCard.addView(tBtn)
-        }
-        eclipsaTabContainer.addView(eclipsaTestCard)
-
-        // =========================================================================
-        // CARD 1: NOW PLAYING SONG DETAILS & LIVE PASS-THROUGH PROOF
-        // =========================================================================
-        val nowPlayingCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
 
-        passThroughBadge = TextView(this).apply {
-            text = "⚪ PASS-THROUGH STANDBY"
-            textSize = 11.5f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        nowPlayingCard.addView(passThroughBadge)
+        columns.addView(auditStreamSummary)
+        columns.addView(auditHardwareSummary)
 
-        songTitleText = TextView(this).apply {
-            text = "🎵 Waiting for Music Player..."
-            textSize = 17f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-            setPadding(0, 12, 0, 4)
-        }
-        nowPlayingCard.addView(songTitleText)
-
-        songArtistText = TextView(this).apply {
-            text = "Play any song in Spotify or YouTube Music"
-            textSize = 13f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 0, 0, 18)
-        }
-        nowPlayingCard.addView(songArtistText)
-
-        // Transport Controls Row (Prev / Play-Pause / Next)
-        val transportRow = LinearLayout(this).apply {
+        val actionRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            weightSum = 3f
-        }
-        val btnLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(6, 0, 6, 0)
-        }
-
-        val prevBtn = Button(this).apply {
-            text = "⏮ Prev"
-            textSize = 13f
-            background = roundedBg("#21262D", "#30363D")
-            setTextColor(Color.WHITE)
-            layoutParams = btnLp
-            setOnClickListener { NowPlayingListenerService.prevTrack(this@MainActivity) }
-        }
-        playPauseBtn = Button(this).apply {
-            text = "⏯ Play/Pause"
-            textSize = 13f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#3FB950")
-            setTextColor(Color.BLACK)
-            layoutParams = btnLp
-            setOnClickListener { NowPlayingListenerService.playPause(this@MainActivity) }
-        }
-        val nextBtn = Button(this).apply {
-            text = "⏭ Next"
-            textSize = 13f
-            background = roundedBg("#21262D", "#30363D")
-            setTextColor(Color.WHITE)
-            layoutParams = btnLp
-            setOnClickListener { NowPlayingListenerService.nextTrack(this@MainActivity) }
-        }
-        transportRow.addView(prevBtn)
-        transportRow.addView(playPauseBtn)
-        transportRow.addView(nextBtn)
-        nowPlayingCard.addView(transportRow)
-
-        enableNotifBtn = Button(this).apply {
-            text = "🔔 Enable Song Title & Artist Sync (1-Tap Permission)"
-            textSize = 12f
-            background = roundedBg("#1F2937", "#58A6FF")
-            setTextColor(Color.parseColor("#58A6FF"))
-            val lp = LinearLayout.LayoutParams(
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 16 }
-            layoutParams = lp
-            setOnClickListener { openNotificationAccessSettings() }
+            )
         }
-        nowPlayingCard.addView(enableNotifBtn)
 
-        bypassBtn = Button(this).apply {
-            text = "🔊 A/B TEST: 360° PREMIUM DSP ON (Tap to Compare Raw)"
-            textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 14 }
-            layoutParams = lp
-            setOnClickListener {
-                LiveSubPassThroughService.isBypassed = !LiveSubPassThroughService.isBypassed
-                refreshMeters()
+        btnRescanAudit = createAuditActionButton("Re-Scan HDMI & Codec") {
+            triggerHardwareAuditScan()
+            injectEclipsaTelemetryScript(webView)
+            refreshTelemetryViews()
+        }
+        btnCloseAudit = createAuditActionButton("Hide Audit HUD") {
+            toggleAuditHud(false)
+            focusTopBarButton(btnAudit)
+        }
+
+        btnRescanAudit.id = View.generateViewId()
+        btnCloseAudit.id = View.generateViewId()
+
+        btnRescanAudit.layoutParams = LinearLayout.LayoutParams(dp(190), dp(36)).apply {
+            marginEnd = dp(10)
+        }
+        btnCloseAudit.layoutParams = LinearLayout.LayoutParams(dp(160), dp(36))
+
+        btnRescanAudit.nextFocusUpId = btnAudit.id
+        btnRescanAudit.nextFocusRightId = btnCloseAudit.id
+        btnRescanAudit.nextFocusLeftId = btnRescanAudit.id
+        btnRescanAudit.nextFocusDownId = webView.id
+
+        btnCloseAudit.nextFocusUpId = btnFullscreen.id
+        btnCloseAudit.nextFocusLeftId = btnRescanAudit.id
+        btnCloseAudit.nextFocusRightId = btnCloseAudit.id
+        btnCloseAudit.nextFocusDownId = webView.id
+
+        actionRow.addView(btnRescanAudit)
+        actionRow.addView(btnCloseAudit)
+
+        inner.addView(title)
+        inner.addView(auditVerdictText)
+        inner.addView(columns)
+        inner.addView(actionRow)
+        scroll.addView(inner)
+        return scroll
+    }
+
+    private fun createAuditActionButton(label: String, onClick: () -> Unit): Button {
+        val btn = Button(this).apply {
+            text = label
+            isAllCaps = false
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            isFocusable = true
+            isFocusableInTouchMode = false
+            setOnClickListener { onClick() }
+        }
+        btn.setOnFocusChangeListener { v, hasFocus ->
+            applyBarButtonStyle(v as Button, false, hasFocus)
+        }
+        applyBarButtonStyle(btn, false, false)
+        return btn
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createConfiguredWebView(): WebView {
+        val wv = WebView(this).apply {
+            setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setBackgroundColor(Color.BLACK)
+        }
+
+        val cookies = CookieManager.getInstance()
+        cookies.setAcceptCookie(true)
+        cookies.setAcceptThirdPartyCookies(wv, true)
+
+        wv.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            mediaPlaybackRequiresUserGesture = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            builtInZoomControls = false
+            displayZoomControls = false
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(false)
+            allowContentAccess = true
+            allowFileAccess = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+            userAgentString = UA_DESKTOP_CHROME
+        }
+
+        wv.addJavascriptInterface(EclipsaJsBridge(), "EclipsaBridge")
+
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(
+                view: WebView?,
+                request: WebResourceRequest?
+            ): Boolean {
+                // Keep all YouTube / Google navigation inside this WebView
+                return false
             }
-        }
-        nowPlayingCard.addView(bypassBtn)
 
-        // =========================================================================
-        // CARD 2: MASTER START / STOP & 4 ONE-TAP PREMIUM SOUND PROFILES
-        // =========================================================================
-        val masterCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        toggleBtn = Button(this).apply {
-            text = "▶ START 360° LIVE SOUND & SUB OPTIMIZER"
-            textSize = 14.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(20, 28, 20, 28)
-            setOnClickListener { toggleService() }
-        }
-        masterCard.addView(toggleBtn)
-
-        val presetTitle = TextView(this).apply {
-            text = "ONE-TAP 360° SOUND PROFILES (NO HARD BASS HIT):"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 22, 0, 10)
-        }
-        masterCard.addView(presetTitle)
-
-        val presetRow1 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = 2f
-        }
-        val halfLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(6, 6, 6, 6)
-        }
-
-        presetVelvetBtn = Button(this).apply {
-            text = "✨ Deep Velvet\n(No Hard Hit)"
-            textSize = 12f
-            layoutParams = halfLp
-            setOnClickListener {
-                LiveSubPassThroughService.applyPreset("DEEP_VELVET")
-                refreshMeters()
-            }
-        }
-        presetSurroundBtn = Button(this).apply {
-            text = "🎭 360° Surround\n(Front + Rear)"
-            textSize = 12f
-            layoutParams = halfLp
-            setOnClickListener {
-                LiveSubPassThroughService.applyPreset("SURROUND_360")
-                refreshMeters()
-            }
-        }
-        presetRow1.addView(presetVelvetBtn)
-        presetRow1.addView(presetSurroundBtn)
-        masterCard.addView(presetRow1)
-
-        val presetRow2 = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = 2f
-        }
-        presetVocalBtn = Button(this).apply {
-            text = "💎 Pure Vocal\n& Silk Highs"
-            textSize = 12f
-            layoutParams = halfLp
-            setOnClickListener {
-                LiveSubPassThroughService.applyPreset("PURE_VOCAL")
-                refreshMeters()
-            }
-        }
-        presetLoudnessBtn = Button(this).apply {
-            text = "🔥 Low-Volume\nRich Loudness"
-            textSize = 12f
-            layoutParams = halfLp
-            setOnClickListener {
-                LiveSubPassThroughService.applyPreset("LOUDNESS_RICH")
-                refreshMeters()
-            }
-        }
-        presetRow2.addView(presetVocalBtn)
-        presetRow2.addView(presetLoudnessBtn)
-        masterCard.addView(presetRow2)
-
-        // =========================================================================
-        // CARD 3: REAL-TIME 5-ZONE ALL-SPEAKER MICROPHONE METERS (TAB 3)
-        // =========================================================================
-        val meterCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        val meterHeader = TextView(this).apply {
-            text = "LIVE ALL-SPEAKER MICROPHONE ANALYZER (5 ZONES)"
-            textSize = 12f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 0, 0, 12)
-        }
-        meterCard.addView(meterHeader)
-
-        // Zone 1: Deep Background Sub (28-62 Hz)
-        val deepLabel = TextView(this).apply {
-            text = "1. DEEP BACKGROUND SUB-BASS (28 - 62 Hz • Velvet Cushion)"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-        }
-        meterCard.addView(deepLabel)
-
-        deepSubValText = TextView(this).apply {
-            text = "42.0 dB  (Velvet Boost: +4.0 dB)"
-            textSize = 18f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        meterCard.addView(deepSubValText)
-
-        deepSubProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 25
-        }
-        meterCard.addView(deepSubProgress)
-
-        // Zone 2: Upper-Bass Hard-Hit Zone (70-140 Hz)
-        val hitLabel = TextView(this).apply {
-            text = "2. UPPER-BASS SLAM / HARD-HIT ZONE (70 - 140 Hz • Suppressed)"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 18, 0, 0)
-        }
-        meterCard.addView(hitLabel)
-
-        hitBassValText = TextView(this).apply {
-            text = "42.0 dB"
-            textSize = 18f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-        }
-        meterCard.addView(hitBassValText)
-
-        hitBassProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 20
-        }
-        meterCard.addView(hitBassProgress)
-
-        cutValText = TextView(this).apply {
-            text = "-3.5 dB Anti-Hit Cut"
-            textSize = 20f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#FF7B00"))
-            setPadding(0, 6, 0, 0)
-        }
-        meterCard.addView(cutValText)
-
-        cutProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 30
-        }
-        meterCard.addView(cutProgress)
-
-        // Zone 3: Front & Rear Speakers (Vocals & Surround Stage)
-        val midLabel = TextView(this).apply {
-            text = "3. FRONT COMPONENT + REAR COAXIAL STAGE (200 - 2800 Hz)"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 18, 0, 0)
-        }
-        meterCard.addView(midLabel)
-
-        midValText = TextView(this).apply {
-            text = "42.0 dB  (360° Stage: +2.5 dB)"
-            textSize = 17f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#58A6FF"))
-        }
-        meterCard.addView(midValText)
-
-        midProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 25
-        }
-        meterCard.addView(midProgress)
-
-        // Zone 4: Tweeters & Distortion Guard
-        highValText = TextView(this).apply {
-            text = "4. Tweeter Highs (3.2 - 12 kHz): 38.0 dB (Silk Trim: -1.0 dB)"
-            textSize = 12.5f
-            setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
-            setTextColor(Color.parseColor("#C9D1D9"))
-            setPadding(0, 16, 0, 4)
-        }
-        meterCard.addView(highValText)
-
-        thdBadgeText = TextView(this).apply {
-            text = "Distortion Guard: 0.2% THD • 100% CLIP-FREE HEADROOM"
-            textSize = 12f
-            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        meterCard.addView(thdBadgeText)
-        micTabContainer.addView(meterCard)
-
-        // =========================================================================
-        // CARD 4: ONE-TAP 360° ALL-SPEAKER AUTO-CALIBRATION (FRONT + REAR + SUB)
-        // =========================================================================
-        val calCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        val calHeader = TextView(this).apply {
-            text = "🎯 360° ALL-SPEAKER AUTO-CALIBRATION (MIC SWEEP)"
-            textSize = 13f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.WHITE)
-        }
-        calCard.addView(calHeader)
-
-        calStatusText = TextView(this).apply {
-            text = LiveSubPassThroughService.calibrationStatus
-            textSize = 12f
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 6, 0, 8)
-        }
-        calCard.addView(calStatusText)
-
-        calProgressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 0
-            setPadding(0, 0, 0, 14)
-        }
-        calCard.addView(calProgressBar)
-
-        autoCalBtn = Button(this).apply {
-            text = "🎯 AUTO-CALIBRATE FRONT + REAR + SUBWOOFER (4-SEC SWEEP)"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#58A6FF")
-            setTextColor(Color.BLACK)
-            setPadding(18, 22, 18, 22)
-            setOnClickListener { triggerAutoCalibration() }
-        }
-        calCard.addView(autoCalBtn)
-
-        calReportText = TextView(this).apply {
-            text = LiveSubPassThroughService.calRecommendation
-            textSize = 12f
-            setTextColor(Color.parseColor("#C9D1D9"))
-            setPadding(0, 14, 0, 0)
-        }
-        calCard.addView(calReportText)
-        micTabContainer.addView(calCard)
-
-        // =========================================================================
-        // CARD 4B: POWERAMP-STYLE 10-BAND PASS-THROUGH EQ, TONE & LIMITER FOR SPOTIFY
-        // =========================================================================
-        val powerampCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        val paHeader = TextView(this).apply {
-            text = "🎛️ POWERAMP-STYLE SPOTIFY PASS-THROUGH EQ, TONE & LIMITER"
-            textSize = 13f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        powerampCard.addView(paHeader)
-
-        val paDesc = TextView(this).apply {
-            text = "Fine-tune Spotify / YouTube Music live with a 10-Band EQ, Bass/Treble Tone, Pre-Amp Headroom & Anti-Clip Limiter for crystal-clear vocals + deep distortion-free bass."
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 4, 0, 12)
-        }
-        powerampCard.addView(paDesc)
-
-        optimizeSpotifyBtn = Button(this).apply {
-            text = "🎧 MEASURE & OPTIMIZE PLAYING SPOTIFY SONG (AUTO-EQ)"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#3FB950")
-            setTextColor(Color.BLACK)
-            setPadding(18, 22, 18, 22)
-            setOnClickListener { triggerSpotifyOptimize() }
-        }
-        powerampCard.addView(optimizeSpotifyBtn)
-
-        spotifyOptStatusText = TextView(this).apply {
-            text = LiveSubPassThroughService.musicOptStatus
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 10, 0, 14)
-        }
-        powerampCard.addView(spotifyOptStatusText)
-
-        // Toggle Row: Live Auto-EQ ON/OFF + Limiter ON/OFF
-        val paToggleRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = 2f
-        }
-        val paHalfLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(6, 0, 6, 14)
-        }
-        autoEqToggleBtn = Button(this).apply {
-            text = "🤖 LIVE AUTO-EQ: ON"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = paHalfLp
-            setOnClickListener {
-                LiveSubPassThroughService.autoPowerampOptimize = !LiveSubPassThroughService.autoPowerampOptimize
-                refreshMeters()
-            }
-        }
-        limiterToggleBtn = Button(this).apply {
-            text = "🛡️ LIMITER: ON"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            layoutParams = paHalfLp
-            setOnClickListener {
-                LiveSubPassThroughService.limiterEnabled = !LiveSubPassThroughService.limiterEnabled
-                refreshMeters()
-            }
-        }
-        paToggleRow.addView(autoEqToggleBtn)
-        paToggleRow.addView(limiterToggleBtn)
-        powerampCard.addView(paToggleRow)
-
-        // Tone & Limiter Sliders
-        toneBassLabel = TextView(this).apply {
-            text = "Bass Tone (31–62 Hz Deep Sub): +2.5 dB"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-        }
-        powerampCard.addView(toneBassLabel)
-        toneBassSeek = SeekBar(this).apply {
-            max = 24 // -6.0 to +6.0 dB in 0.5 steps
-            progress = 17
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        LiveSubPassThroughService.toneBassDb = (p - 12) * 0.5f
-                    }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                super.onPageFinished(view, url)
+                if (url != null) {
+                    jsPageUrl = url
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        powerampCard.addView(toneBassSeek)
-
-        toneTrebleLabel = TextView(this).apply {
-            text = "Treble Tone (8–16 kHz Silk Air): +0.0 dB"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            setPadding(0, 12, 0, 0)
-        }
-        powerampCard.addView(toneTrebleLabel)
-        toneTrebleSeek = SeekBar(this).apply {
-            max = 24
-            progress = 12
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        LiveSubPassThroughService.toneTrebleDb = (p - 12) * 0.5f
-                    }
+                if (view != null) {
+                    injectEclipsaTelemetryScript(view)
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        powerampCard.addView(toneTrebleSeek)
-
-        preampLabel = TextView(this).apply {
-            text = "Pre-Amp Headroom (Anti-Clip): -2.0 dB"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            setPadding(0, 12, 0, 0)
-        }
-        powerampCard.addView(preampLabel)
-        preampSeek = SeekBar(this).apply {
-            max = 16 // -8.0 to 0.0 dB in 0.5 steps
-            progress = 12
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        LiveSubPassThroughService.preampDb = (p - 16) * 0.5f
-                    }
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        powerampCard.addView(preampSeek)
-
-        limiterCeilingLabel = TextView(this).apply {
-            text = "Limiter Ceiling: -1.2 dBFS"
-            textSize = 12f
-            setTextColor(Color.WHITE)
-            setPadding(0, 12, 0, 0)
-        }
-        powerampCard.addView(limiterCeilingLabel)
-        limiterCeilingSeek = SeekBar(this).apply {
-            max = 27 // -3.0 to -0.3 dBFS in 0.1 steps
-            progress = 18
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) {
-                        LiveSubPassThroughService.limiterCeilingDb = -3.0f + (p * 0.1f)
-                    }
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        powerampCard.addView(limiterCeilingSeek)
-
-        val eqSectionTitle = TextView(this).apply {
-            text = "10-BAND GRAPHIC / PARAMETRIC EQUALIZER (-10 to +6 dB)"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 20, 0, 8)
-        }
-        powerampCard.addView(eqSectionTitle)
-
-        eqBandLabels.clear()
-        eqBandSeeks.clear()
-        for (idx in 0 until 10) {
-            val lbl = TextView(this).apply {
-                text = "%-6s | User: %+.1f dB".format(
-                    LiveSubPassThroughService.EQ_LABELS[idx],
-                    LiveSubPassThroughService.userEqOffsetsDb[idx]
-                )
-                textSize = 11.5f
-                setTypeface(Typeface.MONOSPACE, Typeface.NORMAL)
-                setTextColor(Color.parseColor("#C9D1D9"))
-                setPadding(0, 8, 0, 0)
+                CookieManager.getInstance().flush()
             }
-            val sb = SeekBar(this).apply {
-                max = 32 // -10.0 to +6.0 dB in 0.5 dB steps
-                progress = ((LiveSubPassThroughService.userEqOffsetsDb[idx] + 10.0f) * 2.0f).toInt().coerceIn(0, 32)
-                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                        if (fromUser) {
-                            LiveSubPassThroughService.userEqOffsetsDb[idx] = -10.0f + (p * 0.5f)
+        }
+
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest?) {
+                if (request == null) return
+                runOnUiThread {
+                    try {
+                        val grants = request.resources.filter {
+                            it == PermissionRequest.RESOURCE_PROTECTED_MEDIA_ID
+                        }.toTypedArray()
+                        if (grants.isNotEmpty()) {
+                            request.grant(grants)
+                        } else {
+                            request.deny()
+                        }
+                    } catch (_: Exception) {
+                        try {
+                            request.deny()
+                        } catch (_: Exception) {
                         }
                     }
-                    override fun onStartTrackingTouch(s: SeekBar?) {}
-                    override fun onStopTrackingTouch(s: SeekBar?) {}
-                })
-            }
-            eqBandLabels.add(lbl)
-            eqBandSeeks.add(sb)
-            powerampCard.addView(lbl)
-            powerampCard.addView(sb)
-        }
-
-        val resetPaBtn = Button(this).apply {
-            text = "↺ Reset to Crystal Clear Vocals + Deep Bass Preset"
-            textSize = 12f
-            background = roundedBg("#21262D", "#58A6FF")
-            setTextColor(Color.parseColor("#58A6FF"))
-            val lp = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 16 }
-            layoutParams = lp
-            setOnClickListener {
-                LiveSubPassThroughService.resetPowerampCrystalBassPreset()
-                toneBassSeek.progress = 17
-                toneTrebleSeek.progress = 12
-                preampSeek.progress = 12
-                limiterCeilingSeek.progress = 18
-                for (i in 0 until 10) {
-                    eqBandSeeks[i].progress = ((LiveSubPassThroughService.userEqOffsetsDb[i] + 10.0f) * 2.0f).toInt().coerceIn(0, 32)
-                }
-                stereoExpandSeek.progress = LiveSubPassThroughService.stereoExpandPct
-                bassBoostSeek.progress = LiveSubPassThroughService.bassBoostPct
-                refreshMeters()
-            }
-        }
-        powerampCard.addView(resetPaBtn)
-        eqTabContainer.addView(powerampCard)
-        nowPlayingCard.layoutParams = sectionMargin()
-        eqTabContainer.addView(nowPlayingCard)
-        eqTabContainer.addView(masterCard)
-
-        // =========================================================================
-        // CARD 4C: POWERAMP AUDIO FX (STEREO EXPAND + DEEP BASSBOOST + REVERB) (TAB 2)
-        // =========================================================================
-        val fxCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        val fxHeader = TextView(this).apply {
-            text = "✨ POWERAMP AUDIO FX ENGINE (STEREO • SUB • REVERB)"
-            textSize = 13f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        fxCard.addView(fxHeader)
-
-        val fxDesc = TextView(this).apply {
-            text = "Hardware Stereo Widening (Virtualizer), Deep Sub BassBoost FX, and Room Ambience Reverb applied live to Spotify & YouTube Music."
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#8B949E"))
-            setPadding(0, 4, 0, 14)
-        }
-        fxCard.addView(fxDesc)
-
-        fxToggleBtn = Button(this).apply {
-            text = "✨ POWERAMP AUDIO FX: ON"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setOnClickListener {
-                LiveSubPassThroughService.fxEnabled = !LiveSubPassThroughService.fxEnabled
-                refreshMeters()
-            }
-        }
-        fxCard.addView(fxToggleBtn)
-
-        stereoExpandLabel = TextView(this).apply {
-            text = "Stereo Widening / 3D Spatializer FX: 35%"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 18, 0, 0)
-        }
-        fxCard.addView(stereoExpandLabel)
-        stereoExpandSeek = SeekBar(this).apply {
-            max = 100
-            progress = LiveSubPassThroughService.stereoExpandPct
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) LiveSubPassThroughService.stereoExpandPct = p
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        fxCard.addView(stereoExpandSeek)
-
-        bassBoostLabel = TextView(this).apply {
-            text = "Deep Sub BassBoost FX: 30%"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 16, 0, 0)
-        }
-        fxCard.addView(bassBoostLabel)
-        bassBoostSeek = SeekBar(this).apply {
-            max = 100
-            progress = LiveSubPassThroughService.bassBoostPct
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    if (fromUser) LiveSubPassThroughService.bassBoostPct = p
-                }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        fxCard.addView(bassBoostSeek)
-
-        val reverbTitle = TextView(this).apply {
-            text = "ROOM AMBIENCE / REVERB FX PRESET:"
-            textSize = 11.5f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#58A6FF"))
-            setPadding(0, 18, 0, 8)
-        }
-        fxCard.addView(reverbTitle)
-
-        reverbPresetBtns.clear()
-        val reverbNames = arrayOf("None", "Small Room", "Med Room", "Large Hall", "Plate")
-        val reverbRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            weightSum = 5f
-        }
-        val revLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(3, 0, 3, 0)
-        }
-        for (rIdx in reverbNames.indices) {
-            val rBtn = Button(this).apply {
-                text = reverbNames[rIdx]
-                textSize = 10f
-                layoutParams = revLp
-                setPadding(4, 14, 4, 14)
-                setOnClickListener {
-                    LiveSubPassThroughService.reverbPreset = rIdx
-                    refreshMeters()
                 }
             }
-            reverbPresetBtns.add(rBtn)
-            reverbRow.addView(rBtn)
-        }
-        fxCard.addView(reverbRow)
-        fxTabContainer.addView(fxCard)
 
-        // =========================================================================
-        // CARD 5: FINE-TUNE 360° SOUND & DEEP VELVET SUB SLIDERS
-        // =========================================================================
-        val sliderCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
-        }
-
-        // Slider 1: Deep Background Sub Warmth (28-60 Hz)
-        deepWarmthLabel = TextView(this).apply {
-            text = "Deep Background Sub Warmth (28-60 Hz): +4.5 dB"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-        }
-        sliderCard.addView(deepWarmthLabel)
-
-        val deepSeek = SeekBar(this).apply {
-            max = 16 // 0.0 to +8.0 dB
-            progress = 9
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val db = p * 0.5f
-                    LiveSubPassThroughService.deepSubWarmthDb = db
-                    deepWarmthLabel.text = "Deep Background Sub Warmth (28-60 Hz): %+.1f dB".format(db)
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null) {
+                    callback?.onCustomViewHidden()
+                    return
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        sliderCard.addView(deepSeek)
-
-        // Slider 2: Upper-Bass Anti-Hit Sensitivity
-        threshValueLabel = TextView(this).apply {
-            text = "Upper-Bass Anti-Hit Ceiling (70-140 Hz): +2.5 dB over Mids"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 18, 0, 0)
-        }
-        sliderCard.addView(threshValueLabel)
-
-        val threshSeek = SeekBar(this).apply {
-            max = 14
-            progress = 5
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val db = (p - 2).toFloat()
-                    LiveSubPassThroughService.targetBassOverMidsDb = db
-                    threshValueLabel.text = "Upper-Bass Anti-Hit Ceiling (70-140 Hz): %+.1f dB over Mids".format(db)
+                if (customVideoView != null) {
+                    callback?.onCustomViewHidden()
+                    return
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        sliderCard.addView(threshSeek)
+                customVideoView = view
+                customVideoCallback = callback
+                fullscreenContainer.removeAllViews()
+                fullscreenContainer.addView(
+                    view,
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                )
+                fullscreenContainer.visibility = View.VISIBLE
+                mainColumn.visibility = View.GONE
+                applyImmersiveSystemUi()
+            }
 
-        // Slider 3: Max Anti-Hit Cut Limit
-        maxCutValueLabel = TextView(this).apply {
-            text = "Max Hard-Hit Suppression Limit: -12 dB"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 18, 0, 0)
+            override fun onHideCustomView() {
+                exitCustomVideoFullscreen()
+            }
         }
-        sliderCard.addView(maxCutValueLabel)
 
-        val maxCutSeek = SeekBar(this).apply {
-            max = 12
-            progress = 9 // 3..15 dB
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val db = (p + 3).toFloat()
-                    LiveSubPassThroughService.maxSubCutDb = db
-                    maxCutValueLabel.text = "Max Hard-Hit Suppression Limit: -%.0f dB".format(db)
+        return wv
+    }
+
+    private fun exitCustomVideoFullscreen() {
+        val current = customVideoView ?: return
+        fullscreenContainer.removeView(current)
+        fullscreenContainer.visibility = View.GONE
+        mainColumn.visibility = View.VISIBLE
+        customVideoView = null
+        try {
+            customVideoCallback?.onCustomViewHidden()
+        } catch (_: Exception) {
+        }
+        customVideoCallback = null
+        applyImmersiveSystemUi()
+        webView.requestFocus()
+    }
+
+    private fun loadPlayerMode(mode: PlayerMode, initialLoad: Boolean) {
+        currentMode = mode
+        when (mode) {
+            PlayerMode.YT_WEB -> {
+                webView.settings.userAgentString = UA_DESKTOP_CHROME
+                cursorEnabled = true
+                if (!initialLoad || webView.url == null) {
+                    webView.loadUrl(URL_YT_WEB)
+                } else {
+                    webView.loadUrl(URL_YT_WEB)
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
+            }
+            PlayerMode.YT_TV -> {
+                webView.settings.userAgentString = UA_SMART_TV
+                // Keep cursor easily toggleable; in TV mode D-Pad arrows drive native Leanback UI when Cursor OFF
+                cursorEnabled = false
+                webView.loadUrl(URL_YT_TV)
+            }
         }
-        sliderCard.addView(maxCutSeek)
+        updateTopBarVisuals()
+        updateCursorUiState()
+    }
 
-        // Slider 4: Front + Rear 360° Vocal & Surround Stage
-        surroundLabel = TextView(this).apply {
-            text = "Front + Rear 360° Vocal Clarity: +2.5 dB"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 18, 0, 0)
+    private fun updateCursorUiState() {
+        btnCursor.text = if (cursorEnabled) "Cursor: ON" else "Cursor: OFF"
+        cursorOverlay.visibility = if (cursorEnabled) View.VISIBLE else View.GONE
+        cursorOverlay.setCursorActive(cursorEnabled && isFocusInsidePlayer())
+        if (cursorEnabled) {
+            ensureInitialCursorPosition()
         }
-        sliderCard.addView(surroundLabel)
+        updateTopBarVisuals()
+    }
 
-        val surroundSeek = SeekBar(this).apply {
-            max = 12 // 0.0 to +6.0 dB
-            progress = 5
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val db = p * 0.5f
-                    LiveSubPassThroughService.surroundClarityDb = db
-                    surroundLabel.text = "Front + Rear 360° Vocal Clarity: %+.1f dB".format(db)
+    private fun ensureInitialCursorPosition() {
+        playerContainer.post {
+            if (!cursorInitialized && playerContainer.width > 0 && playerContainer.height > 0) {
+                cursorOverlay.setPosition(
+                    playerContainer.width * 0.50f,
+                    playerContainer.height * 0.48f
+                )
+                cursorInitialized = true
+            }
+        }
+    }
+
+    private fun toggleAuditHud(show: Boolean) {
+        auditVisible = show
+        auditCard.visibility = if (show) View.VISIBLE else View.GONE
+
+        val barButtons = listOf(btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen)
+        val nextDownId = if (show) btnRescanAudit.id else webView.id
+        barButtons.forEach { it.nextFocusDownId = nextDownId }
+
+        if (show) {
+            triggerHardwareAuditScan()
+            injectEclipsaTelemetryScript(webView)
+            refreshTelemetryViews()
+            btnRescanAudit.post { btnRescanAudit.requestFocus() }
+        }
+        updateTopBarVisuals()
+    }
+
+    private fun toggleAppFullscreen(fullscreen: Boolean) {
+        appFullscreen = fullscreen
+        if (fullscreen) {
+            if (auditVisible) {
+                toggleAuditHud(false)
+            }
+            topBarContainer.visibility = View.GONE
+            webView.requestFocus()
+        } else {
+            topBarContainer.visibility = View.VISIBLE
+            focusTopBarButton(btnFullscreen)
+        }
+        updateTopBarVisuals()
+    }
+
+    private fun isFocusInsidePlayer(): Boolean {
+        val focused = currentFocus
+        return focused == webView || focused == playerContainer
+    }
+
+    private fun focusTopBarButton(preferred: View? = null) {
+        if (appFullscreen) {
+            appFullscreen = false
+            topBarContainer.visibility = View.VISIBLE
+            updateTopBarVisuals()
+        }
+        val target = preferred ?: lastFocusedBarButton ?: btnYtWeb
+        target.requestFocus()
+        cursorOverlay.setCursorActive(false)
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val keyCode = event.keyCode
+
+        // 1. MENU key always toggles between Player and Top Bar (and exits Fullscreen if hidden)
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                if (customVideoView != null) {
+                    exitCustomVideoFullscreen()
+                } else if (appFullscreen) {
+                    toggleAppFullscreen(false)
+                } else if (isFocusInsidePlayer()) {
+                    focusTopBarButton()
+                } else {
+                    webView.requestFocus()
+                    cursorOverlay.setCursorActive(cursorEnabled)
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
+            }
+            return true
         }
-        sliderCard.addView(surroundSeek)
 
-        // Slider 5: Tweeter Anti-Harshness / Silk Smoothness
-        tweeterLabel = TextView(this).apply {
-            text = "Tweeter Anti-Harshness & Silk Control: 2.5 dB"
-            textSize = 12.5f
-            setTextColor(Color.WHITE)
-            setPadding(0, 18, 0, 0)
-        }
-        sliderCard.addView(tweeterLabel)
-
-        val tweeterSeek = SeekBar(this).apply {
-            max = 10 // 0.0 to 5.0 dB
-            progress = 5
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
-                    val db = p * 0.5f
-                    LiveSubPassThroughService.tweeterSmoothDb = db
-                    tweeterLabel.text = "Tweeter Anti-Harshness & Silk Control: %.1f dB".format(db)
+        // 2. Intercept D-Pad movement and Center click for the Virtual Remote Cursor when inside Player
+        if (customVideoView == null && cursorEnabled && isFocusInsidePlayer()) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN -> {
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        handleCursorMove(keyCode, event.repeatCount)
+                    }
+                    return true
                 }
-                override fun onStartTrackingTouch(s: SeekBar?) {}
-                override fun onStopTrackingTouch(s: SeekBar?) {}
-            })
-        }
-        sliderCard.addView(tweeterSeek)
-        fxTabContainer.addView(sliderCard)
-
-        // =========================================================================
-        // CARD 6: ANDROID AUTO LAUNCHER SETUP FOR PIONEER DMH-Z5290BT
-        // =========================================================================
-        val autoCard = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = cardBg()
-            setPadding(32, 28, 32, 28)
-            layoutParams = sectionMargin()
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_ENTER -> {
+                    handleCursorClickEvent(event)
+                    return true
+                }
+            }
         }
 
-        val autoHeader = TextView(this).apply {
-            text = "🚗 SHOW THIS APP ON ANDROID AUTO CAR SCREEN"
-            textSize = 13f
-            setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#3FB950"))
-        }
-        autoCard.addView(autoHeader)
+        return super.dispatchKeyEvent(event)
+    }
 
-        val autoNote = TextView(this).apply {
-            text = "Note: Even before adding the icon to your car dashboard, the 360° Live Sound & Sub Optimizer ALREADY filters all Spotify & YouTube Music audio playing over Android Auto!\n\nTo make the '360° Sound & Sub Guard' icon appear on your Pioneer DMH-Z5290BT screen (required by Google for APKs installed outside Play Store):\n1. Tap the button below to open Android Auto Settings.\n2. Scroll down and tap 'Version' 10 times to unlock Developer Mode.\n3. Tap the 3-dots menu (top right) -> 'Developer settings' -> Check 'Unknown sources'."
-            textSize = 12f
-            setTextColor(Color.parseColor("#C9D1D9"))
-            setPadding(0, 8, 0, 16)
-        }
-        autoCard.addView(autoNote)
+    private fun handleCursorMove(keyCode: Int, repeatCount: Int) {
+        val width = playerContainer.width.toFloat()
+        val height = playerContainer.height.toFloat()
+        if (width <= 0f || height <= 0f) return
 
-        val autoSettingsBtn = Button(this).apply {
-            text = "🚗 Open Android Auto Settings (Enable Car Launcher Icon)"
-            textSize = 12.5f
-            setTypeface(typeface, Typeface.BOLD)
-            background = roundedBg("#21262D", "#3FB950")
-            setTextColor(Color.parseColor("#3FB950"))
-            setOnClickListener { openAndroidAutoSettings() }
+        val density = resources.displayMetrics.density
+        val step = when {
+            repeatCount >= 12 -> 40f * density
+            repeatCount >= 4 -> 26f * density
+            else -> 15f * density
         }
-        autoCard.addView(autoSettingsBtn)
-        micTabContainer.addView(autoCard)
+        val edgeZone = 34f * density
+        val scrollStep = (64f * density).toInt()
 
-        selectTab(0)
-        scroll.addView(root)
-        return scroll
+        var x = cursorOverlay.cursorX
+        var y = cursorOverlay.cursorY
+
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_LEFT -> x -= step
+            KeyEvent.KEYCODE_DPAD_RIGHT -> x += step
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                if (y <= 4f * density) {
+                    val beforeScrollY = webView.scrollY
+                    webView.scrollBy(0, -scrollStep)
+                    if (webView.scrollY == beforeScrollY) {
+                        // Reached top edge and page didn't scroll further up -> switch cleanly to Top Bar!
+                        focusTopBarButton()
+                        return
+                    }
+                    y = 0f
+                } else {
+                    y -= step
+                    if (y < edgeZone && webView.canScrollVertically(-1)) {
+                        webView.scrollBy(0, -scrollStep)
+                    }
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                y += step
+                if (y > height - edgeZone && webView.canScrollVertically(1)) {
+                    webView.scrollBy(0, scrollStep)
+                }
+            }
+        }
+
+        x = max(0f, min(width - 1f, x))
+        y = max(0f, min(height - 1f, y))
+        cursorOverlay.setPosition(x, y)
+    }
+
+    private fun handleCursorClickEvent(event: KeyEvent) {
+        val x = cursorOverlay.cursorX
+        val y = cursorOverlay.cursorY
+
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            if (event.repeatCount == 0) {
+                cursorClickDownTime = SystemClock.uptimeMillis()
+                cursorOverlay.triggerClickPulse()
+                val downMotion = MotionEvent.obtain(
+                    cursorClickDownTime,
+                    cursorClickDownTime,
+                    MotionEvent.ACTION_DOWN,
+                    x,
+                    y,
+                    0
+                )
+                webView.dispatchTouchEvent(downMotion)
+                downMotion.recycle()
+            }
+        } else if (event.action == KeyEvent.ACTION_UP) {
+            val now = SystemClock.uptimeMillis()
+            val downTime = if (cursorClickDownTime > 0L) cursorClickDownTime else now
+            val upMotion = MotionEvent.obtain(
+                downTime,
+                now,
+                MotionEvent.ACTION_UP,
+                x,
+                y,
+                0
+            )
+            webView.dispatchTouchEvent(upMotion)
+            upMotion.recycle()
+            cursorClickDownTime = 0L
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        when {
+            customVideoView != null -> exitCustomVideoFullscreen()
+            auditVisible -> {
+                toggleAuditHud(false)
+                focusTopBarButton(btnAudit)
+            }
+            appFullscreen -> toggleAppFullscreen(false)
+            isFocusInsidePlayer() && webView.canGoBack() -> webView.goBack()
+            isFocusInsidePlayer() -> focusTopBarButton()
+            else -> super.onBackPressed()
+        }
+    }
+
+    private fun injectEclipsaTelemetryScript(view: WebView) {
+        val js = """
+            (function() {
+                try {
+                    if (!window.__eclipsaMseCodecs) {
+                        window.__eclipsaMseCodecs = [];
+                    }
+                    if (!window.__eclipsaHooked && window.MediaSource && MediaSource.prototype) {
+                        window.__eclipsaHooked = true;
+                        var origAdd = MediaSource.prototype.addSourceBuffer;
+                        MediaSource.prototype.addSourceBuffer = function(mime) {
+                            try {
+                                if (mime && window.__eclipsaMseCodecs.indexOf(mime) === -1) {
+                                    window.__eclipsaMseCodecs.push(mime);
+                                    if (window.__eclipsaMseCodecs.length > 6) {
+                                        window.__eclipsaMseCodecs.shift();
+                                    }
+                                }
+                            } catch (e) {}
+                            return origAdd.apply(this, arguments);
+                        };
+                    }
+
+                    function fmtTime(sec) {
+                        if (!isFinite(sec) || sec < 0) return '0:00';
+                        sec = Math.floor(sec);
+                        var m = Math.floor(sec / 60);
+                        var s = sec % 60;
+                        return m + ':' + (s < 10 ? '0' : '') + s;
+                    }
+
+                    function reportEclipsa() {
+                        try {
+                            var videos = Array.prototype.slice.call(document.querySelectorAll('video'));
+                            var v = null;
+                            for (var i = 0; i < videos.length; i++) {
+                                if (!videos[i].paused && videos[i].readyState >= 2) {
+                                    v = videos[i];
+                                    break;
+                                }
+                            }
+                            if (!v && videos.length > 0) v = videos[0];
+
+                            var caps = [];
+                            if (window.MediaSource && MediaSource.isTypeSupported) {
+                                if (MediaSource.isTypeSupported('audio/mp4; codecs="iamf"')) caps.push('IAMF:YES');
+                                else caps.push('IAMF:NO');
+                                if (MediaSource.isTypeSupported('audio/mp4; codecs="ec-3"')) caps.push('EC-3:YES');
+                                else caps.push('EC-3:NO');
+                                if (MediaSource.isTypeSupported('audio/webm; codecs="opus"')) caps.push('OPUS:YES');
+                                if (MediaSource.isTypeSupported('audio/mp4; codecs="mp4a.40.2"')) caps.push('AAC:YES');
+                            }
+
+                            var res = '--';
+                            var playing = false;
+                            var timeStr = '0:00 / 0:00';
+                            var audioBytes = 0;
+                            if (v) {
+                                playing = (!v.paused && !v.ended && v.readyState >= 2);
+                                if (v.videoWidth > 0 && v.videoHeight > 0) {
+                                    res = v.videoWidth + 'x' + v.videoHeight;
+                                }
+                                timeStr = fmtTime(v.currentTime) + ' / ' + fmtTime(v.duration);
+                                audioBytes = v.webkitAudioDecodedByteCount || 0;
+                            }
+
+                            var title = (document.title || 'YouTube').replace(/\s*-\s*YouTube$/i, '').trim();
+                            var payload = {
+                                title: title,
+                                url: location.href,
+                                playing: playing,
+                                resolution: res,
+                                timeStr: timeStr,
+                                audioBytes: audioBytes,
+                                mseCodecs: window.__eclipsaMseCodecs.join(' | '),
+                                caps: caps.join('  ')
+                            };
+                            if (window.EclipsaBridge && window.EclipsaBridge.onTelemetry) {
+                                window.EclipsaBridge.onTelemetry(JSON.stringify(payload));
+                            }
+                        } catch (err) {}
+                    }
+
+                    reportEclipsa();
+                    if (!window.__eclipsaTimer) {
+                        window.__eclipsaTimer = setInterval(reportEclipsa, 900);
+                    }
+                } catch (e) {}
+            })();
+        """.trimIndent()
+        view.evaluateJavascript(js, null)
+    }
+
+    inner class EclipsaJsBridge {
+        @JavascriptInterface
+        fun onTelemetry(jsonText: String) {
+            try {
+                val obj = JSONObject(jsonText)
+                jsVideoTitle = obj.optString("title", "YouTube").ifBlank { "YouTube" }
+                jsPageUrl = obj.optString("url", URL_YT_WEB)
+                jsIsPlaying = obj.optBoolean("playing", false)
+                jsResolution = obj.optString("resolution", "--")
+                jsPlaybackTime = obj.optString("timeStr", "0:00 / 0:00")
+                jsAudioDecodedBytes = obj.optLong("audioBytes", 0L)
+                val mse = obj.optString("mseCodecs", "")
+                jsMseCodecs = if (mse.isBlank()) "Waiting for active <video> audio track..." else mse
+                jsBrowserCapabilities = obj.optString("caps", "IAMF/EC-3 checked")
+                jsLastUpdateMs = System.currentTimeMillis()
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun refreshTelemetryViews() {
+        val hwScore = LiveSubPassThroughService.eclipsaAuditScore
+        val hwVerdict = LiveSubPassThroughService.eclipsaAuditVerdict
+        val hdmiReport = LiveSubPassThroughService.eclipsaHdmiSinkReport
+        val codecReport = LiveSubPassThroughService.eclipsaCodecReport
+        val chReport = LiveSubPassThroughService.eclipsaChannelMapReport
+        val activeApp = NowPlayingListenerService.currentAppName
+        val pulse = LiveSubPassThroughService.passThroughPulse
+
+        val mseLower = jsMseCodecs.lowercase()
+        val hasIamfMse = mseLower.contains("iamf")
+        val hasEc3Mse = mseLower.contains("ec-3") || mseLower.contains("eac3")
+
+        val streamTag = when {
+            hasIamfMse -> "IAMF STREAM"
+            hasEc3Mse -> "E-AC3 STREAM"
+            jsIsPlaying -> "YT PLAYING"
+            else -> "YT READY"
+        }
+
+        statusBadge.text = "$streamTag • AUDIT $hwScore/100"
+
+        if (!auditVisible) return
+
+        val audioKb = jsAudioDecodedBytes / 1024L
+        auditStreamSummary.text = buildString {
+            appendLine("YOUTUBE STREAM AUDIT")
+            appendLine("Title: $jsVideoTitle")
+            appendLine("State: ${if (jsIsPlaying) "PLAYING" else "PAUSED / IDLE"}  |  Res: $jsResolution  |  Time: $jsPlaybackTime")
+            appendLine("Audio Decoded: ${audioKb} KB  |  Mode: ${if (currentMode == PlayerMode.YT_TV) "YT TV" else "YT Web"}")
+            appendLine("Negotiated MSE: $jsMseCodecs")
+            append("WebView Probe: $jsBrowserCapabilities")
+        }
+
+        auditHardwareSummary.text = buildString {
+            appendLine("FIRE TV -> SOUNDBAR HDMI eARC AUDIT")
+            appendLine("Active Audio App: $activeApp  |  Signal Level: $pulse%")
+            appendLine("HDMI Sink: $hdmiReport")
+            appendLine("Codecs: $codecReport")
+            append("Spatializer / Map: $chReport")
+        }
+
+        val combinedVerdict = when {
+            hasIamfMse -> "REAL ECLIPSA IAMF STREAM DETECTED ($hwScore/100 HW Score) — $hwVerdict"
+            hasEc3Mse -> "DOLBY E-AC3 MULTICHANNEL STREAM ACTIVE ($hwScore/100 HW Score) — $hwVerdict"
+            jsIsPlaying -> "YOUTUBE AUDIO PLAYING (Browser MSE: ${if (jsBrowserCapabilities.contains("IAMF:YES")) "IAMF Ready" else "PCM/Opus/AAC Bridge"}) — HW $hwScore/100 ($hwVerdict)"
+            else -> "AUDIT SCORE $hwScore/100 — $hwVerdict (Start any YouTube video to inspect live MSE audio codec)"
+        }
+        auditVerdictText.text = combinedVerdict
+    }
+
+    /**
+     * Bright, always-clear Virtual Remote Cursor overlay for Fire TV D-Pad navigation.
+     */
+    private class RemoteCursorOverlayView(context: Context) : View(context) {
+        var cursorX: Float = 0f
+            private set
+        var cursorY: Float = 0f
+            private set
+
+        private var active: Boolean = false
+        private var clickPulseUntil: Long = 0L
+
+        private val density = context.resources.displayMetrics.density
+
+        private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * density
+            color = Color.parseColor(COLOR_CYAN)
+        }
+
+        private val pulsePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.argb(110, 0, 229, 255)
+        }
+
+        private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 3f * density
+            strokeJoin = Paint.Join.ROUND
+            color = Color.parseColor("#080C14")
+        }
+
+        private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor(COLOR_GOLD)
+        }
+
+        private val tipDotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = Color.parseColor(COLOR_CYAN)
+        }
+
+        private val arrowPath = Path()
+
+        fun setPosition(x: Float, y: Float) {
+            cursorX = x
+            cursorY = y
+            invalidate()
+        }
+
+        fun setCursorActive(isActive: Boolean) {
+            active = isActive
+            invalidate()
+        }
+
+        fun triggerClickPulse() {
+            clickPulseUntil = SystemClock.uptimeMillis() + 200L
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val now = SystemClock.uptimeMillis()
+            val alpha = if (active) 255 else 125
+
+            // Click ripple feedback
+            if (now < clickPulseUntil) {
+                val frac = 1f - ((clickPulseUntil - now).toFloat() / 200f)
+                pulsePaint.alpha = ((1f - frac) * 140).toInt()
+                canvas.drawCircle(cursorX, cursorY, (12f + 22f * frac) * density, pulsePaint)
+                postInvalidateDelayed(16L)
+            }
+
+            // Glowing circular reticle around cursor tip
+            haloPaint.alpha = if (active) 235 else 110
+            canvas.drawCircle(cursorX, cursorY, 13f * density, haloPaint)
+
+            // Crisp TV Arrow pointer originating at (cursorX, cursorY)
+            val s = density * 1.25f
+            arrowPath.reset()
+            arrowPath.moveTo(cursorX, cursorY)
+            arrowPath.lineTo(cursorX, cursorY + 21f * s)
+            arrowPath.lineTo(cursorX + 5.5f * s, cursorY + 16.5f * s)
+            arrowPath.lineTo(cursorX + 10.5f * s, cursorY + 24.5f * s)
+            arrowPath.lineTo(cursorX + 13.8f * s, cursorY + 22.8f * s)
+            arrowPath.lineTo(cursorX + 9f * s, cursorY + 15f * s)
+            arrowPath.lineTo(cursorX + 15.5f * s, cursorY + 14.5f * s)
+            arrowPath.close()
+
+            outlinePaint.alpha = alpha
+            fillPaint.alpha = alpha
+            tipDotPaint.alpha = alpha
+
+            canvas.drawPath(arrowPath, outlinePaint)
+            canvas.drawPath(arrowPath, fillPaint)
+            canvas.drawCircle(cursorX, cursorY, 3f * density, tipDotPaint)
+        }
     }
 }

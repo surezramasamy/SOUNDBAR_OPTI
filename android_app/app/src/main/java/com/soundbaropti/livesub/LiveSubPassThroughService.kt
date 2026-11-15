@@ -318,6 +318,8 @@ class LiveSubPassThroughService : Service() {
         startForegroundNotification()
         isRunning = true
         registerDynamicReceivers()
+        applyPreset("ECLIPSA_714")
+        runEclipsaHardwareAudit()
         NowPlayingListenerService.refreshFromMediaSessionManager(this)
         val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         isMusicStreamActive = am.isMusicActive
