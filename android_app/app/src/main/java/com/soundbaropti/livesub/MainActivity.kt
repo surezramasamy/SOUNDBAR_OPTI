@@ -341,6 +341,11 @@ class MainActivity : Activity() {
         topBarContainer.addView(buttonRow)
         topBarContainer.addView(hintText)
 
+        // Create WebView first so barButtons and Audit HUD focus wiring can reference webView.id safely
+        webView = createConfiguredWebView()
+        webView.id = View.generateViewId()
+        barButtons.forEach { it.nextFocusDownId = webView.id }
+
         // Collapsible Live Eclipsa Audit HUD
         auditCard = buildAuditHudCard()
         auditCard.visibility = View.GONE
@@ -354,10 +359,6 @@ class MainActivity : Activity() {
             )
             setBackgroundColor(Color.BLACK)
         }
-
-        webView = createConfiguredWebView()
-        webView.id = View.generateViewId()
-        barButtons.forEach { it.nextFocusDownId = webView.id }
 
         cursorOverlay = RemoteCursorOverlayView(this).apply {
             layoutParams = FrameLayout.LayoutParams(
