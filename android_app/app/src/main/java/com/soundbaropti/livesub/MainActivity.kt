@@ -16,6 +16,10 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.View
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -74,13 +78,28 @@ class MainActivity : Activity() {
     private val eqBandLabels = mutableListOf<TextView>()
     private val eqBandSeeks = mutableListOf<SeekBar>()
 
-    // Poweramp Top Tab Bar & AudioFX UI (v2.5)
+    // Poweramp Top Tab Bar & AudioFX UI (v3.0 Eclipsa + Fire TV Max)
+    private lateinit var tabEclipsaBtn: Button
     private lateinit var tabEqBtn: Button
     private lateinit var tabFxBtn: Button
     private lateinit var tabMicBtn: Button
+    private lateinit var eclipsaTabContainer: LinearLayout
     private lateinit var eqTabContainer: LinearLayout
     private lateinit var fxTabContainer: LinearLayout
     private lateinit var micTabContainer: LinearLayout
+
+    // Eclipsa Audio & Fire TV Stick Max UI
+    private lateinit var eclipsaBridgeBadge: TextView
+    private lateinit var eclipsaActivateBtn: Button
+    private lateinit var eclipsaAuditBtn: Button
+    private lateinit var eclipsaAuditVerdictText: TextView
+    private lateinit var eclipsaHdmiReportText: TextView
+    private lateinit var eclipsaCodecReportText: TextView
+    private lateinit var eclipsaChannelMapText: TextView
+    private lateinit var eclipsaTestStatusText: TextView
+    private lateinit var eclipsaWebView: WebView
+    private var activeEclipsaVideoId = "BnbxkFx7uzc"
+
     private lateinit var fxToggleBtn: Button
     private lateinit var stereoExpandLabel: TextView
     private lateinit var stereoExpandSeek: SeekBar
@@ -121,8 +140,24 @@ class MainActivity : Activity() {
         uiHandler.removeCallbacks(updateRunnable)
     }
 
+    override fun onDestroy() {
+        try { eclipsaWebView.destroy() } catch (_: Exception) {}
+        super.onDestroy()
+    }
+
+    private fun startServiceCompat(intent: Intent) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
     private fun requestNeededPermissions() {
-        val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        val perms = mutableListOf<String>()
+        if (packageManager.hasSystemFeature(PackageManager.FEATURE_MICROPHONE)) {
+            perms.add(Manifest.permission.RECORD_AUDIO)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -133,22 +168,62 @@ class MainActivity : Activity() {
     }
 
     private fun toggleService() {
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestNeededPermissions()
-            return
-        }
         val intent = Intent(this, LiveSubPassThroughService::class.java)
         if (LiveSubPassThroughService.isRunning) {
             intent.action = LiveSubPassThroughService.ACTION_STOP
             startService(intent)
         } else {
             intent.action = LiveSubPassThroughService.ACTION_START
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
+            startServiceCompat(intent)
         }
+    }
+
+    private fun activateEclipsaBridge() {
+        LiveSubPassThroughService.applyPreset("ECLIPSA_714")
+        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_START
+        }
+        startServiceCompat(intent)
+        refreshMeters()
+    }
+
+    private fun triggerEclipsaAudit() {
+        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_RUN_ECLIPSA_AUDIT
+        }
+        startServiceCompat(intent)
+    }
+
+    private fun triggerEclipsaTest(testId: String) {
+        LiveSubPassThroughService.applyPreset("ECLIPSA_714")
+        val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
+            action = LiveSubPassThroughService.ACTION_PLAY_ECLIPSA_TEST
+            putExtra(LiveSubPassThroughService.EXTRA_ECLIPSA_TEST_ID, testId)
+        }
+        startServiceCompat(intent)
+    }
+
+    private fun playVideoInBuiltInEclipsaPlayer(videoId: String) {
+        activeEclipsaVideoId = videoId
+        activateEclipsaBridge()
+        val embedHtml = """
+            <!DOCTYPE html>
+            <html><body style="margin:0;background:#000;">
+            <iframe width="100%" height="100%" style="position:fixed;top:0;left:0;width:100%;height:100%;border:0;"
+              src="https://www.youtube.com/embed/$videoId?autoplay=1&rel=0&playsinline=1"
+              allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+            </body></html>
+        """.trimIndent()
+        eclipsaWebView.loadDataWithBaseURL("https://www.youtube.com", embedHtml, "text/html", "UTF-8", null)
+    }
+
+    private fun openVideoInFireTvYouTube(videoId: String) {
+        activeEclipsaVideoId = videoId
+        activateEclipsaBridge()
+        try {
+            val ytIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
+            startActivity(ytIntent)
+        } catch (_: Exception) {}
     }
 
     private fun triggerAutoCalibration() {
@@ -159,11 +234,7 @@ class MainActivity : Activity() {
         val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
             action = LiveSubPassThroughService.ACTION_RUN_SWEEP
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        startServiceCompat(intent)
     }
 
     private fun triggerSpotifyOptimize() {
@@ -174,11 +245,7 @@ class MainActivity : Activity() {
         val intent = Intent(this, LiveSubPassThroughService::class.java).apply {
             action = LiveSubPassThroughService.ACTION_OPTIMIZE_MUSIC
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        startServiceCompat(intent)
     }
 
     private fun openNotificationAccessSettings() {
@@ -356,16 +423,31 @@ class MainActivity : Activity() {
         for (rIdx in reverbPresetBtns.indices) {
             stylePresetBtn(reverbPresetBtns[rIdx], LiveSubPassThroughService.reverbPreset == rIdx)
         }
+
+        // Eclipsa Audio & Fire TV Stick Max Status Refresh
+        eclipsaBridgeBadge.text = if (running) {
+            "🟢 ECLIPSA 7.1.4 -> 9.1.4 BRIDGE ACTIVE • ${NowPlayingListenerService.currentAppName} (Frame #$pulse) • Audit: ${LiveSubPassThroughService.eclipsaAuditScore}/100"
+        } else {
+            "⚪ ECLIPSA BRIDGE STANDBY • Tap Activate below before launching YouTube on Fire TV Max"
+        }
+        eclipsaBridgeBadge.setTextColor(if (running) Color.parseColor("#3FB950") else Color.parseColor("#D29922"))
+        eclipsaAuditVerdictText.text = LiveSubPassThroughService.eclipsaAuditVerdict
+        eclipsaHdmiReportText.text = LiveSubPassThroughService.eclipsaHdmiSinkReport
+        eclipsaCodecReportText.text = LiveSubPassThroughService.eclipsaCodecReport
+        eclipsaChannelMapText.text = LiveSubPassThroughService.eclipsaChannelMapReport
+        eclipsaTestStatusText.text = LiveSubPassThroughService.eclipsaTestStatus
     }
 
     private fun selectTab(tabIndex: Int) {
         activeTabIndex = tabIndex
-        eqTabContainer.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
-        fxTabContainer.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
-        micTabContainer.visibility = if (tabIndex == 2) View.VISIBLE else View.GONE
-        stylePresetBtn(tabEqBtn, tabIndex == 0)
-        stylePresetBtn(tabFxBtn, tabIndex == 1)
-        stylePresetBtn(tabMicBtn, tabIndex == 2)
+        eclipsaTabContainer.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
+        eqTabContainer.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
+        fxTabContainer.visibility = if (tabIndex == 2) View.VISIBLE else View.GONE
+        micTabContainer.visibility = if (tabIndex == 3) View.VISIBLE else View.GONE
+        stylePresetBtn(tabEclipsaBtn, tabIndex == 0)
+        stylePresetBtn(tabEqBtn, tabIndex == 1)
+        stylePresetBtn(tabFxBtn, tabIndex == 2)
+        stylePresetBtn(tabMicBtn, tabIndex == 3)
     }
 
     private fun stylePresetBtn(btn: Button, active: Boolean) {
@@ -407,7 +489,7 @@ class MainActivity : Activity() {
         }
 
         val title = TextView(this).apply {
-            text = "360° Poweramp Sound & Sub Guard v2.6"
+            text = "Eclipsa Audio & 360° Sub Guard v3.0"
             textSize = 20f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.WHITE)
@@ -415,9 +497,9 @@ class MainActivity : Activity() {
         root.addView(title)
 
         val subtitle = TextView(this).apply {
-            text = "Poweramp 10-Band EQ • Stereo/Bass/Reverb FX • Live Spotify Optimizer"
-            textSize = 12f
-            setTextColor(Color.parseColor("#58A6FF"))
+            text = "Fire TV Stick 4K Max • YouTube IAMF 7.1.4 -> 9.1.4 Samsung Soundbar • Poweramp EQ"
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#A371F7"))
             setPadding(0, 4, 0, 8)
         }
         root.addView(subtitle)
@@ -431,48 +513,64 @@ class MainActivity : Activity() {
         root.addView(statusBadge)
 
         // =========================================================================
-        // TOP POWERAMP 3-TAB BAR (IMMEDIATELY VISIBLE AT TOP ON LAUNCH)
+        // TOP 4-TAB BAR (ECLIPSA & YT FIRST FOR FIRE TV STICK 4K MAX + REMOTE)
         // =========================================================================
         val tabBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            weightSum = 3f
+            weightSum = 4f
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = 18 }
         }
         val tabLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-            setMargins(4, 0, 4, 0)
+            setMargins(3, 0, 3, 0)
         }
-        tabEqBtn = Button(this).apply {
-            text = "🎛️ Poweramp EQ"
-            textSize = 11.5f
+        tabEclipsaBtn = Button(this).apply {
+            text = "🌌 Eclipsa & YT"
+            textSize = 10.5f
             setTypeface(typeface, Typeface.BOLD)
+            isFocusable = true
             layoutParams = tabLp
             setOnClickListener { selectTab(0) }
         }
-        tabFxBtn = Button(this).apply {
-            text = "✨ FX & Limiter"
-            textSize = 11.5f
+        tabEqBtn = Button(this).apply {
+            text = "🎛️ Poweramp EQ"
+            textSize = 10.5f
             setTypeface(typeface, Typeface.BOLD)
+            isFocusable = true
             layoutParams = tabLp
             setOnClickListener { selectTab(1) }
         }
-        tabMicBtn = Button(this).apply {
-            text = "📊 Mic & Cal"
-            textSize = 11.5f
+        tabFxBtn = Button(this).apply {
+            text = "✨ FX & Limiter"
+            textSize = 10.5f
             setTypeface(typeface, Typeface.BOLD)
+            isFocusable = true
             layoutParams = tabLp
             setOnClickListener { selectTab(2) }
         }
+        tabMicBtn = Button(this).apply {
+            text = "📊 Mic & Cal"
+            textSize = 10.5f
+            setTypeface(typeface, Typeface.BOLD)
+            isFocusable = true
+            layoutParams = tabLp
+            setOnClickListener { selectTab(3) }
+        }
+        tabBar.addView(tabEclipsaBtn)
         tabBar.addView(tabEqBtn)
         tabBar.addView(tabFxBtn)
         tabBar.addView(tabMicBtn)
         root.addView(tabBar)
 
-        eqTabContainer = LinearLayout(this).apply {
+        eclipsaTabContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             visibility = View.VISIBLE
+        }
+        eqTabContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
         }
         fxTabContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -482,9 +580,235 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             visibility = View.GONE
         }
+        root.addView(eclipsaTabContainer)
         root.addView(eqTabContainer)
         root.addView(fxTabContainer)
         root.addView(micTabContainer)
+
+        // =========================================================================
+        // ECLIPSA TAB CARD 1: REAL ECLIPSA AUDIO AUDIT & FIRE TV MAX -> SAMSUNG BRIDGE
+        // =========================================================================
+        val eclipsaAuditCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+        }
+        eclipsaAuditCard.addView(TextView(this).apply {
+            text = "🌌 FIRE TV STICK 4K MAX -> YOUTUBE -> SAMSUNG ECLIPSA BRIDGE"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#A371F7"))
+        })
+        eclipsaBridgeBadge = TextView(this).apply {
+            text = "⚪ ECLIPSA BRIDGE STANDBY"
+            textSize = 11.5f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#D29922"))
+            setPadding(0, 10, 0, 14)
+        }
+        eclipsaAuditCard.addView(eclipsaBridgeBadge)
+
+        eclipsaActivateBtn = Button(this).apply {
+            text = "🌌 ACTIVATE ECLIPSA 7.1.4 -> 9.1.4 SAMSUNG SOUNDBAR BRIDGE"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#A371F7")
+            setTextColor(Color.BLACK)
+            isFocusable = true
+            setPadding(16, 22, 16, 22)
+            setOnClickListener { activateEclipsaBridge() }
+        }
+        eclipsaAuditCard.addView(eclipsaActivateBtn)
+
+        eclipsaAuditBtn = Button(this).apply {
+            text = "🔍 RUN REAL ECLIPSA AUDIO & HDMI eARC AUDIT"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            background = roundedBg("#21262D", "#58A6FF")
+            setTextColor(Color.parseColor("#58A6FF"))
+            isFocusable = true
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = 14 }
+            layoutParams = lp
+            setPadding(16, 20, 16, 20)
+            setOnClickListener { triggerEclipsaAudit() }
+        }
+        eclipsaAuditCard.addView(eclipsaAuditBtn)
+
+        eclipsaAuditVerdictText = TextView(this).apply {
+            text = LiveSubPassThroughService.eclipsaAuditVerdict
+            textSize = 12f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+            setPadding(0, 14, 0, 4)
+        }
+        eclipsaAuditCard.addView(eclipsaAuditVerdictText)
+
+        eclipsaHdmiReportText = TextView(this).apply {
+            text = LiveSubPassThroughService.eclipsaHdmiSinkReport
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#C9D1D9"))
+            setPadding(0, 4, 0, 4)
+        }
+        eclipsaAuditCard.addView(eclipsaHdmiReportText)
+
+        eclipsaCodecReportText = TextView(this).apply {
+            text = LiveSubPassThroughService.eclipsaCodecReport
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 2, 0, 4)
+        }
+        eclipsaAuditCard.addView(eclipsaCodecReportText)
+
+        eclipsaChannelMapText = TextView(this).apply {
+            text = LiveSubPassThroughService.eclipsaChannelMapReport
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#58A6FF"))
+            setPadding(0, 4, 0, 0)
+        }
+        eclipsaAuditCard.addView(eclipsaChannelMapText)
+        eclipsaTabContainer.addView(eclipsaAuditCard)
+
+        // =========================================================================
+        // ECLIPSA TAB CARD 2: VERIFIED YOUTUBE ECLIPSA (IAMF itag 773) PLAYER
+        // =========================================================================
+        val eclipsaYtCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+        eclipsaYtCard.addView(TextView(this).apply {
+            text = "🎬 PLAY VERIFIED YOUTUBE ECLIPSA AUDIO (IAMF 7.1.4)"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.WHITE)
+        })
+        eclipsaYtCard.addView(TextView(this).apply {
+            text = "Play directly inside the Built-In Eclipsa Spatial WebPlayer or launch Fire TV YouTube / SmartTube with our 7.1.4 -> 9.1.4 Eclipsa DSP locked on."
+            textSize = 11.5f
+            setTextColor(Color.parseColor("#8B949E"))
+            setPadding(0, 4, 0, 12)
+        })
+
+        eclipsaWebView = WebView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                460
+            ).apply { bottomMargin = 14 }
+            setBackgroundColor(Color.BLACK)
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mediaPlaybackRequiresUserGesture = false
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+            settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
+            webViewClient = WebViewClient()
+            webChromeClient = WebChromeClient()
+            loadData(
+                "<html><body style='background:#090c10;color:#8b949e;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;margin:0;padding:16px;'><div><b style='color:#a371f7;'>Built-In Eclipsa Audio Spatial Player</b><br><br>Tap <b>▶ Built-In Eclipsa Player</b> below to stream any verified YouTube IAMF 7.1.4 video with 9.1.4 DSP active.</div></body></html>",
+                "text/html",
+                "UTF-8"
+            )
+        }
+        eclipsaYtCard.addView(eclipsaWebView)
+
+        val curatedYtList = listOf(
+            Pair("BnbxkFx7uzc", "7.1.4 Speaker Test (Eclipsa Audio & IAMF) — Height + Surround"),
+            Pair("NZtshMSQTKA", "5.1.2 Soundcheck — Eclipsa Audio & IAMF Test for Soundbars"),
+            Pair("EMQBNlsTsRQ", "Eclipsa Audio / 7.1.4 Discrete Channel Check"),
+            Pair("t3Bxe4CVesU", "Height Speaker Test (7.1.4 IAMF) — 4 Top Speakers Only"),
+            Pair("zG44XEoA_HE", "Live Orchestra Captured in 3D Spatial Sound (Eclipsa / IAMF)")
+        )
+        for ((vid, vTitle) in curatedYtList) {
+            eclipsaYtCard.addView(TextView(this).apply {
+                text = "• $vTitle"
+                textSize = 12f
+                setTypeface(typeface, Typeface.BOLD)
+                setTextColor(Color.parseColor("#C9D1D9"))
+                setPadding(0, 10, 0, 6)
+            })
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                weightSum = 2f
+            }
+            val rLp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(4, 0, 4, 6)
+            }
+            val inAppBtn = Button(this).apply {
+                text = "▶ Built-In Eclipsa Player"
+                textSize = 10.5f
+                background = roundedBg("#21262D", "#A371F7")
+                setTextColor(Color.parseColor("#D2A8FF"))
+                isFocusable = true
+                layoutParams = rLp
+                setOnClickListener { playVideoInBuiltInEclipsaPlayer(vid) }
+            }
+            val tvAppBtn = Button(this).apply {
+                text = "📺 Fire TV YouTube + DSP"
+                textSize = 10.5f
+                background = roundedBg("#21262D", "#3FB950")
+                setTextColor(Color.parseColor("#3FB950"))
+                isFocusable = true
+                layoutParams = rLp
+                setOnClickListener { openVideoInFireTvYouTube(vid) }
+            }
+            row.addView(inAppBtn)
+            row.addView(tvAppBtn)
+            eclipsaYtCard.addView(row)
+        }
+        eclipsaTabContainer.addView(eclipsaYtCard)
+
+        // =========================================================================
+        // ECLIPSA TAB CARD 3: BUILT-IN DISCRETE 12-CHANNEL ECLIPSA HARDWARE TEST
+        // =========================================================================
+        val eclipsaTestCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = cardBg()
+            setPadding(32, 28, 32, 28)
+            layoutParams = sectionMargin()
+        }
+        eclipsaTestCard.addView(TextView(this).apply {
+            text = "🔊 BUILT-IN 12-CHANNEL ECLIPSA 7.1.4 HARDWARE SPEAKER TEST"
+            textSize = 12.5f
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#58A6FF"))
+        })
+        eclipsaTestStatusText = TextView(this).apply {
+            text = LiveSubPassThroughService.eclipsaTestStatus
+            textSize = 11.5f
+            setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+            setTextColor(Color.parseColor("#3FB950"))
+            setPadding(0, 8, 0, 12)
+        }
+        eclipsaTestCard.addView(eclipsaTestStatusText)
+
+        val testBtnConfigs = listOf(
+            Triple("🔊 Play Full 12-Ch Eclipsa 7.1.4 Sequential Check (Bed + 4 Height + LFE)", "full_714", "#58A6FF"),
+            Triple("☁️ Play 4-Speaker Overhead Height Only Test (TFL / TFR / TBL / TBR)", "height_only", "#A371F7"),
+            Triple("🎸 Play Deep Velvet LFE Sub Test (28–62 Hz • Zero Hard Hit)", "velvet_lfe", "#3FB950")
+        )
+        for ((label, tid, hex) in testBtnConfigs) {
+            val tBtn = Button(this).apply {
+                text = label
+                textSize = 11.5f
+                setTypeface(typeface, Typeface.BOLD)
+                background = roundedBg("#21262D", hex)
+                setTextColor(Color.parseColor(hex))
+                isFocusable = true
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = 10 }
+                layoutParams = lp
+                setPadding(16, 18, 16, 18)
+                setOnClickListener { triggerEclipsaTest(tid) }
+            }
+            eclipsaTestCard.addView(tBtn)
+        }
+        eclipsaTabContainer.addView(eclipsaTestCard)
 
         // =========================================================================
         // CARD 1: NOW PLAYING SONG DETAILS & LIVE PASS-THROUGH PROOF

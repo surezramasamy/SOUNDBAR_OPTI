@@ -22,6 +22,9 @@ object NowPlayingListenerService {
     fun friendlyAppName(pkg: String): String {
         val lower = pkg.lowercase()
         return when {
+            lower.contains("firetv.youtube") ||
+                lower.contains("youtube.tv") ||
+                lower.contains("smarttubetv") -> "YouTube TV (Eclipsa 7.1.4 Bridge)"
             lower.contains("spotify") -> "Spotify"
             lower.contains("youtube.music") || lower.contains("vanced") -> "YouTube Music"
             lower.contains("youtube") -> "YouTube"

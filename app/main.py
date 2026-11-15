@@ -18,9 +18,14 @@ try:
         ALL_SOUNDBAR_CHANNELS,
         Q930_CHANNELS,
         SOUNDBAR_LAYOUT_PRESETS,
+        ECLIPSA_IAMF_CHANNELS,
+        CURATED_YOUTUBE_ECLIPSA_VIDEOS,
         get_channels_for_configuration,
         generate_bandlimited_pink_noise,
-        analyze_recorded_channel_audio
+        analyze_recorded_channel_audio,
+        generate_eclipsa_iamf_wav,
+        audit_youtube_eclipsa_stream,
+        audit_recorded_eclipsa_acoustics
     )
     from app.car_audio_dsp import (
         CAR_CHANNELS,
@@ -33,9 +38,14 @@ except ImportError:
         ALL_SOUNDBAR_CHANNELS,
         Q930_CHANNELS,
         SOUNDBAR_LAYOUT_PRESETS,
+        ECLIPSA_IAMF_CHANNELS,
+        CURATED_YOUTUBE_ECLIPSA_VIDEOS,
         get_channels_for_configuration,
         generate_bandlimited_pink_noise,
-        analyze_recorded_channel_audio
+        analyze_recorded_channel_audio,
+        generate_eclipsa_iamf_wav,
+        audit_youtube_eclipsa_stream,
+        audit_recorded_eclipsa_acoustics
     )
     from car_audio_dsp import (
         CAR_CHANNELS,
@@ -103,6 +113,14 @@ def get_live_sub_page():
     if os.path.exists(live_file):
         return FileResponse(live_file, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "360° Live Sound & Sub Guard Page."}
+
+
+@app.get("/eclipsa")
+def get_eclipsa_page():
+    eclipsa_file = os.path.join(static_dir, "eclipsa.html")
+    if os.path.exists(eclipsa_file):
+        return FileResponse(eclipsa_file, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return {"message": "Eclipsa Audio (IAMF 7.1.4 / 9.1.4) Player & Auditor Page."}
 
 
 @app.get("/download-apk")
@@ -704,3 +722,61 @@ def calculate_car_calibration():
         "pioneer_60pct_guide": pioneer_60pct_guide,
         "channels": results
     }
+
+
+# ==============================================================================
+# 3. ECLIPSA AUDIO (IAMF 7.1.4 / 9.1.4) YOUTUBE & SOUNDBAR AUDIT ENDPOINTS
+# ==============================================================================
+
+@app.get("/api/eclipsa/catalog")
+def get_eclipsa_catalog():
+    """Returns curated YouTube Eclipsa Audio videos, 13 discrete IAMF test channels, and Soundbar layouts."""
+    return {
+        "videos": CURATED_YOUTUBE_ECLIPSA_VIDEOS,
+        "channels": ECLIPSA_IAMF_CHANNELS,
+        "soundbar_layouts": list(SOUNDBAR_LAYOUT_PRESETS.keys()),
+    }
+
+
+@app.post("/api/eclipsa/audit-youtube")
+async def audit_youtube_eclipsa(
+    video_url: str = Form(...),
+    device_type: str = Form("Fire TV Stick 4K Max"),
+    soundbar_model: str = Form("Samsung Q930 (9.1.4)")
+):
+    """Audits a YouTube video for IAMF itag 773 Eclipsa Audio spec, Fire TV Stick Max pipeline, and Samsung Soundbar routing."""
+    return audit_youtube_eclipsa_stream(
+        video_url_or_id=video_url,
+        device_type=device_type,
+        soundbar_model=soundbar_model,
+    )
+
+
+@app.get("/api/eclipsa/stream/{channel_id}")
+def get_eclipsa_stream(
+    channel_id: str,
+    duration: float = 4.5,
+    soundbar_layout: str = "9.1.4"
+):
+    """Generates a discrete 48 kHz Eclipsa Audio (IAMF 7.1.4 -> 9.1.4) spatial WAV test stream."""
+    wav_bytes = generate_eclipsa_iamf_wav(
+        channel_id=channel_id,
+        duration=max(1.5, min(15.0, duration)),
+        soundbar_layout=soundbar_layout,
+    )
+    return Response(content=wav_bytes, media_type="audio/wav")
+
+
+@app.post("/api/eclipsa/audit-acoustic")
+async def audit_eclipsa_acoustic(
+    file: UploadFile = File(...),
+    soundbar_layout: str = Form("9.1.4")
+):
+    """Audits recorded room WAV audio while Eclipsa Audio plays on the Samsung Soundbar."""
+    wav_content = await file.read()
+    if len(wav_content) < 1000:
+        raise HTTPException(status_code=400, detail="Audio recording too short")
+    try:
+        return audit_recorded_eclipsa_acoustics(wav_content, target_layout=soundbar_layout)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Error auditing Eclipsa acoustics: {str(e)}")
