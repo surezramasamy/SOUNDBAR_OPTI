@@ -86,6 +86,7 @@ class MainActivity : Activity() {
     private lateinit var mainColumn: LinearLayout
     private lateinit var topBarContainer: LinearLayout
     private lateinit var buttonRow: LinearLayout
+    private lateinit var appsLinkRow: LinearLayout
     private lateinit var statusBadge: TextView
     private lateinit var hintText: TextView
 
@@ -94,6 +95,10 @@ class MainActivity : Activity() {
     private lateinit var btnCursor: Button
     private lateinit var btnAudit: Button
     private lateinit var btnFullscreen: Button
+
+    private lateinit var btnLinkSoundbar: Button
+    private lateinit var btnLinkPioneer: Button
+    private lateinit var btnLinkOptimizer: Button
 
     private lateinit var auditCard: ScrollView
     private lateinit var auditStreamSummary: TextView
@@ -232,6 +237,8 @@ class MainActivity : Activity() {
 
         mainColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT
@@ -242,7 +249,9 @@ class MainActivity : Activity() {
         topBarContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.parseColor(COLOR_BAR))
-            setPadding(dp(14), dp(8), dp(14), dp(8))
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -286,6 +295,8 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(8), 0, dp(4))
+            clipChildren = false
+            clipToPadding = false
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -329,7 +340,7 @@ class MainActivity : Activity() {
         }
 
         hintText = TextView(this).apply {
-            text = "D-Pad Left/Right: Switch Control  |  D-Pad Down: Use Remote Cursor on YouTube  |  MENU: Bar / Exit Fullscreen"
+            text = "D-Pad Left/Right/Up/Down: Switch Controls & Old Apps  |  Down past Links: Remote Cursor on YouTube  |  MENU: Bar"
             setTextColor(Color.parseColor(COLOR_MUTED))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f)
             maxLines = 1
@@ -337,14 +348,64 @@ class MainActivity : Activity() {
             setPadding(dp(2), dp(2), dp(2), 0)
         }
 
+        // Second Row: Direct Navigation Links to Next Screen with All Old Apps & Functions
+        appsLinkRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(4), 0, dp(4))
+            clipChildren = false
+            clipToPadding = false
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        btnLinkSoundbar = createTvBarButton("Soundbar Cali ->") {
+            openLegacySuite(0)
+        }
+        btnLinkPioneer = createTvBarButton("Pioneer Car 4.1 ->") {
+            openLegacySuite(1)
+        }
+        btnLinkOptimizer = createTvBarButton("Old Optimizer, EQ & Tests ->") {
+            openLegacySuite(2)
+        }
+
+        btnLinkSoundbar.id = View.generateViewId()
+        btnLinkPioneer.id = View.generateViewId()
+        btnLinkOptimizer.id = View.generateViewId()
+
+        val linkButtons = listOf(btnLinkSoundbar, btnLinkPioneer, btnLinkOptimizer)
+        linkButtons.forEachIndexed { idx, btn ->
+            val lp = LinearLayout.LayoutParams(0, dp(36), 1f)
+            if (idx < linkButtons.lastIndex) lp.marginEnd = dp(8)
+            btn.layoutParams = lp
+            btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f)
+            btn.nextFocusLeftId = if (idx > 0) linkButtons[idx - 1].id else btn.id
+            btn.nextFocusRightId = if (idx < linkButtons.lastIndex) linkButtons[idx + 1].id else btn.id
+            appsLinkRow.addView(btn)
+        }
+
+        // Wire Row 1 <-> Row 2 D-Pad up/down links cleanly
+        btnYtWeb.nextFocusDownId = btnLinkSoundbar.id
+        btnYtTv.nextFocusDownId = btnLinkSoundbar.id
+        btnCursor.nextFocusDownId = btnLinkPioneer.id
+        btnAudit.nextFocusDownId = btnLinkPioneer.id
+        btnFullscreen.nextFocusDownId = btnLinkOptimizer.id
+
+        btnLinkSoundbar.nextFocusUpId = btnYtWeb.id
+        btnLinkPioneer.nextFocusUpId = btnCursor.id
+        btnLinkOptimizer.nextFocusUpId = btnFullscreen.id
+
         topBarContainer.addView(headerRow)
         topBarContainer.addView(buttonRow)
+        topBarContainer.addView(appsLinkRow)
         topBarContainer.addView(hintText)
 
-        // Create WebView first so barButtons and Audit HUD focus wiring can reference webView.id safely
+        // Create WebView first so barButtons, links, and Audit HUD focus wiring can reference webView.id safely
         webView = createConfiguredWebView()
         webView.id = View.generateViewId()
-        barButtons.forEach { it.nextFocusDownId = webView.id }
+        linkButtons.forEach { it.nextFocusDownId = webView.id }
 
         // Collapsible Live Eclipsa Audit HUD
         auditCard = buildAuditHudCard()
@@ -479,10 +540,20 @@ class MainActivity : Activity() {
     }
 
     private fun updateTopBarVisuals() {
-        val all = listOf(btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen)
+        val all = listOf(
+            btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen,
+            btnLinkSoundbar, btnLinkPioneer, btnLinkOptimizer
+        )
         all.forEach { b ->
             applyBarButtonStyle(b, isButtonActive(b), b.hasFocus())
         }
+    }
+
+    private fun openLegacySuite(initialTab: Int) {
+        val intent = Intent(this, LegacySuiteActivity::class.java).apply {
+            putExtra(LegacySuiteActivity.EXTRA_INITIAL_TAB, initialTab)
+        }
+        startActivity(intent)
     }
 
     private fun buildAuditHudCard(): ScrollView {
@@ -801,9 +872,9 @@ class MainActivity : Activity() {
         auditVisible = show
         auditCard.visibility = if (show) View.VISIBLE else View.GONE
 
-        val barButtons = listOf(btnYtWeb, btnYtTv, btnCursor, btnAudit, btnFullscreen)
+        val linkButtons = listOf(btnLinkSoundbar, btnLinkPioneer, btnLinkOptimizer)
         val nextDownId = if (show) btnRescanAudit.id else webView.id
-        barButtons.forEach { it.nextFocusDownId = nextDownId }
+        linkButtons.forEach { it.nextFocusDownId = nextDownId }
 
         if (show) {
             triggerHardwareAuditScan()

@@ -75,15 +75,15 @@
     Play verified <b>Eclipsa Audio (IAMF itag 773)</b> streams, bridge <b>Fire TV Stick 4K Max &rarr; YouTube &rarr; Samsung Soundbar</b> over HDMI eARC, verify all 12 discrete drivers (7.1.4 &rarr; 9.1.4), and run live real-time Eclipsa Audio Audits.
   </div>
 
-  <!-- CARD 1: FIRE TV STICK 4K MAX APK v4.0 DOWNLOAD & SETUP -->
+  <!-- CARD 1: FIRE TV STICK 4K MAX APK v4.1 DOWNLOAD & SETUP -->
   <div class="card">
-    <h3>📲 Card 1: Fire TV Stick 4K Max &amp; Android App v4.0 (Clean Eclipsa YouTube Player + Remote Cursor + Live Audit)</h3>
+    <h3>📲 Card 1: Fire TV Stick 4K Max &amp; Android App v4.1 (Eclipsa Player + Next-Screen Legacy Suite)</h3>
     <div class="note-box">
-      <b>What's new in v4.0 on Fire TV Stick 4K Max:</b> Clean TV-first Eclipsa YouTube Player with <b>zero optimizer clutter</b> and <b>zero test buttons</b> — featuring in-app <b>YouTube Web + TV playback</b>, a glowing <b>On-Screen Fire TV Remote Cursor</b> with smooth Gold D-Pad switching, and a real-time <b>Eclipsa Audio (IAMF) + HDMI eARC Hardware Auditor</b>.
+      <b>What's new in v4.1:</b> Keeps the main screen clean for in-app <b>YouTube + Fire TV Remote Cursor + Live Eclipsa Audit</b>, and adds top-bar links (<b>Soundbar Cali &rarr;</b>, <b>Pioneer Car 4.1 &rarr;</b>, <b>Old Optimizer, EQ &amp; Tests &rarr;</b>) opening the Next Screen with all Samsung Soundbar, Pioneer Car 4.1, 10-Band Poweramp EQ, AudioFX, 360° Sub, and 12-Ch test tools.
     </div>
 
     <button id="apkDownloadBtn" class="btn btn-blue" style="margin-bottom: 8px;" onclick="downloadApkWithProgress()">
-      ⬇️ Download LiveSubGuard.apk v4.0 (Fire TV Stick Max + Android)
+      ⬇️ Download LiveSubGuard.apk v4.1 (Fire TV Stick Max + Android)
     </button>
 
     <div id="apkProgressBox" style="display:none; background:#090c10; border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;">
@@ -533,7 +533,7 @@
       xhr.onprogress = function(e) {
         if (e.lengthComputable && e.total > 0) {
           const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
-          statusEl.innerText = `Downloading LiveSubGuard.apk v4.0 (${(e.loaded / 1024).toFixed(0)} KB)...`;
+          statusEl.innerText = `Downloading LiveSubGuard.apk v4.1 (${(e.loaded / 1024).toFixed(0)} KB)...`;
           pctEl.innerText = `${pct}%`;
           barEl.style.width = `${pct}%`;
         }

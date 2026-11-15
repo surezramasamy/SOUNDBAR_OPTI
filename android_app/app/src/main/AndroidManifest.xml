@@ -38,6 +38,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LegacySuiteActivity"
+            android:configChanges="orientation|screenSize|keyboard|keyboardHidden|navigation"
+            android:exported="true" />
+
         <!-- Foreground 360° Mic, Eclipsa TV Bridge & Multi-Speaker Pass-Through DSP Service -->
         <service
             android:name=".LiveSubPassThroughService"
